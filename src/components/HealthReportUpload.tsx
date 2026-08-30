@@ -1,7 +1,12 @@
-import React, { useRef, useState } from 'react';
-import { Upload, ExternalLink, Trash2, Loader2, ImagePlus, AlertCircle } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Upload, ExternalLink, Trash2, Loader2, ImagePlus, AlertCircle, Link as LinkIcon } from 'lucide-react';
 import { HealthReport, HealthReportSource } from '../types';
-import { uploadHealthReportToDrive } from '../lib/googleDrive';
+import {
+  uploadHealthReportToDrive,
+  preloadGoogleIdentity,
+  requestDriveAccess,
+  hasDriveAccessToken,
+} from '../lib/googleDrive';
 import { isGoogleDriveConfigured } from '../lib/supabaseClient';
 
 interface HealthReportUploadProps {
@@ -9,6 +14,7 @@ interface HealthReportUploadProps {
   reports: HealthReport[];
   onAdd: (report: Omit<HealthReport, 'id' | 'uploadedAt'>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  readOnly?: boolean;
 }
 
 const SOURCE_OPTIONS: { value: HealthReportSource; label: string }[] = [
@@ -19,13 +25,39 @@ const SOURCE_OPTIONS: { value: HealthReportSource; label: string }[] = [
   { value: 'other', label: 'Other App/Device' },
 ];
 
-export const HealthReportUpload: React.FC<HealthReportUploadProps> = ({ date, reports, onAdd, onDelete }) => {
+export const HealthReportUpload: React.FC<HealthReportUploadProps> = ({ date, reports, onAdd, onDelete, readOnly }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<HealthReportSource>('other');
+  const [connected, setConnected] = useState(hasDriveAccessToken());
+  const [connecting, setConnecting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const todaysReports = reports.filter((r) => r.date === date);
+
+  useEffect(() => {
+    if (isGoogleDriveConfigured) {
+      preloadGoogleIdentity().catch(() => {
+        // surfaced only when the user actually tries to connect
+      });
+    }
+  }, []);
+
+  // MUST run synchronously inside the click handler (no await before the
+  // Google call) or the browser blocks the consent popup.
+  const handleConnect = () => {
+    setError(null);
+    setConnecting(true);
+    requestDriveAccess()
+      .then(() => {
+        setConnected(true);
+        setConnecting(false);
+      })
+      .catch((err) => {
+        setError(err?.message || 'Could not connect to Google Drive.');
+        setConnecting(false);
+      });
+  };
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,17 +96,29 @@ export const HealthReportUpload: React.FC<HealthReportUploadProps> = ({ date, re
         <strong>your own Google Drive</strong> — never our servers — inside a "Challenge 360 - Health Reports" folder.
       </p>
 
-      {!isGoogleDriveConfigured ? (
-        <div className="flex items-start gap-2 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-800 rounded-lg p-3">
+      {readOnly ? (
+        <p className="text-xs text-slate-500 italic mb-2">Read-only view — uploads are only available on your own scorecard.</p>
+      ) : !isGoogleDriveConfigured ? (
+        <div className="flex items-start gap-2 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-lg p-3">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>Google Drive upload isn't configured yet. Ask your admin to set VITE_GOOGLE_CLIENT_ID.</span>
         </div>
+      ) : !connected ? (
+        <button
+          type="button"
+          disabled={connecting}
+          onClick={handleConnect}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-slate-200 text-xs font-bold transition-colors border border-slate-700"
+        >
+          {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LinkIcon className="w-3.5 h-3.5" />}
+          {connecting ? 'Connecting…' : 'Connect Google Drive'}
+        </button>
       ) : (
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <select
             value={source}
             onChange={(e) => setSource(e.target.value as HealthReportSource)}
-            className="px-2.5 py-2 rounded-lg border border-slate-800 text-xs font-semibold text-slate-400 bg-slate-900 focus:outline-none focus:border-indigo-500"
+            className="px-2.5 py-2 rounded-lg border border-slate-700 text-xs font-semibold text-slate-300 bg-slate-800 focus:outline-none focus:border-indigo-500"
           >
             {SOURCE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -96,21 +140,21 @@ export const HealthReportUpload: React.FC<HealthReportUploadProps> = ({ date, re
       )}
 
       {error && (
-        <div className="flex items-start gap-2 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-lg p-2.5 mb-3">
+        <div className="flex items-start gap-2 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-lg p-2.5 mt-3">
           <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
       {todaysReports.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
           {todaysReports.map((r) => (
-            <div key={r.id} className="relative group rounded-xl border border-slate-800 overflow-hidden bg-slate-900/50">
+            <div key={r.id} className="relative group rounded-xl border border-slate-800 overflow-hidden bg-slate-800/40">
               <a href={r.driveViewLink} target="_blank" rel="noopener noreferrer" className="block">
                 {r.driveThumbnailLink ? (
                   <img src={r.driveThumbnailLink} alt={r.driveFileName} className="w-full h-24 object-cover" />
                 ) : (
-                  <div className="w-full h-24 flex items-center justify-center text-slate-300">
+                  <div className="w-full h-24 flex items-center justify-center text-slate-700">
                     <ImagePlus className="w-6 h-6" />
                   </div>
                 )}
@@ -122,16 +166,18 @@ export const HealthReportUpload: React.FC<HealthReportUploadProps> = ({ date, re
                     href={r.driveViewLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5"
+                    className="text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5"
                   >
                     <ExternalLink className="w-3 h-3" /> View
                   </a>
-                  <button
-                    onClick={() => onDelete(r.id)}
-                    className="text-[10px] text-rose-500 hover:underline flex items-center gap-0.5"
-                  >
-                    <Trash2 className="w-3 h-3" /> Remove
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => onDelete(r.id)}
+                      className="text-[10px] text-rose-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <Trash2 className="w-3 h-3" /> Remove
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

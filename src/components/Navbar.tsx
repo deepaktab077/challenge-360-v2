@@ -97,7 +97,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Quick Stats Badges — desktop only */}
-            <div className="hidden md:flex items-center space-x-2 lg:space-x-3">
+            <div className="hidden lg:flex items-center space-x-2 xl:space-x-3">
               <div
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-slate-900/50 border border-slate-800 text-xs text-slate-300 shadow-sm"
                 title="Consecutive days logged"
@@ -137,7 +137,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Navigation & Actions — desktop */}
-            <div className="hidden md:flex items-center space-x-1 sm:space-x-2">
+            <div className="hidden lg:flex items-center space-x-1 xl:space-x-2">
               {isAdmin && allProfiles && allProfiles.length > 0 && (
                 <select
                   value={actingUserId || ''}
@@ -196,7 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Mobile: streak + hamburger */}
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex lg:hidden items-center gap-2">
               <div className="flex items-center gap-1 text-xs font-bold text-slate-300">
                 <Flame className={`w-4 h-4 ${currentStreak > 0 ? 'text-orange-500' : 'text-slate-400'}`} />
                 {currentStreak}
@@ -213,7 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Mobile sub-banner with quick badges */}
-        <div className="md:hidden flex items-center justify-between px-4 py-2 bg-slate-900/50 border-t border-slate-800 text-xs font-medium">
+        <div className="lg:hidden flex items-center justify-between px-4 py-2 bg-slate-900/50 border-t border-slate-800 text-xs font-medium">
           <button onClick={openWorkoutModal} className="text-indigo-400 font-bold flex items-center space-x-1">
             <Users className="w-3.5 h-3.5" />
             <span>Workout: +{thisWeekWorkoutBonus} pts</span>
@@ -229,7 +229,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </header>
 
       {/* Mobile bottom tab bar — phone-first navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-800 shadow-[0_-2px_10px_rgba(0,0,0,0.3)] pb-[env(safe-area-inset-bottom)]">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-800 shadow-[0_-2px_10px_rgba(0,0,0,0.3)] pb-[env(safe-area-inset-bottom)]">
         <div className="grid grid-cols-4 gap-0.5 px-1 py-1.5">
           {[
             { view: 'today' as ActiveView, label: 'Logger', Icon: LayoutGrid },
@@ -258,11 +258,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       </nav>
 
       {/* Spacer so content isn't hidden behind the fixed bottom bar */}
-      <div className="md:hidden h-16" />
+      <div className="lg:hidden h-16" />
 
       {/* Mobile slide-up menu sheet */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40 flex items-end">
+        <div className="lg:hidden fixed inset-0 z-40 flex items-end">
           <div className="absolute inset-0 bg-black/70" onClick={() => setMobileMenuOpen(false)} />
           <div className="relative w-full bg-slate-900 rounded-t-3xl p-5 pb-8 space-y-1 animate-fadeIn">
             <div className="flex items-center justify-between mb-3">

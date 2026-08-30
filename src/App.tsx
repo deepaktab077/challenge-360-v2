@@ -37,10 +37,11 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Feed } from './pages/Feed';
 
 export default function App() {
-  const { session, profile, isAdmin, loading, allProfiles, actingUserId, actingProfile, setActingUserId, signOut } =
+  const { session, profile, isAdmin, loading, allProfiles, actingUserId, actingProfile, setActingUserId, signOut, refreshMyProfile } =
     useAuth();
 
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+  const [dismissedTeamPrompt, setDismissedTeamPrompt] = useState(false);
 
   // State
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
@@ -247,12 +248,20 @@ export default function App() {
     );
   }
 
-  const needsTeamCompletion = !!profile && profile.role === 'user' && !profile.teamId;
+  const needsTeamCompletion = !!profile && profile.role === 'user' && !profile.teamId && !dismissedTeamPrompt;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-600 selection:text-white flex flex-col justify-between">
       {needsTeamCompletion && profile && (
-        <CompleteProfileModal userId={profile.id} currentName={profile.fullName} onDone={reloadData} />
+        <CompleteProfileModal
+          userId={profile.id}
+          currentName={profile.fullName}
+          onDone={async () => {
+            await refreshMyProfile();
+            await reloadData();
+          }}
+          onDismiss={() => setDismissedTeamPrompt(true)}
+        />
       )}
 
       <Navbar
@@ -318,7 +327,14 @@ export default function App() {
           </div>
         )}
 
-        {activeView === 'leaderboard' && <Leaderboard />}
+        {activeView === 'leaderboard' && (
+          <Leaderboard
+            onEditAsAdmin={(userId) => {
+              setActingUserId(userId);
+              setActiveView('today');
+            }}
+          />
+        )}
 
         {activeView === 'feed' && <Feed />}
 

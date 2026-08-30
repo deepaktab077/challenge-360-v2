@@ -191,7 +191,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
         {/* Bar Visualizer */}
         <div className="mt-6">
-          <div className="flex items-end space-x-1.5 sm:space-x-2.5 h-48 sm:h-56 pt-6 pb-2">
+          <div className="-mx-1 px-1 overflow-x-auto">
+            <div className="flex items-end gap-1.5 sm:gap-2.5 h-48 sm:h-56 pt-6 pb-2 min-w-max">
             {chartData.map((d) => {
               const heightPercent = Math.round((d.score / 90) * 100);
               const isPerfect = d.bonus > 0;
@@ -203,7 +204,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <div
                   key={d.date}
                   onClick={() => onSelectDate(d.date)}
-                  className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer"
+                  className="flex flex-col items-center h-full justify-end group cursor-pointer w-6 sm:w-7 flex-shrink-0"
                   title={`${formatDisplayDate(d.date)}: ${d.score} pts ${isPerfect ? '(360° Day Bonus +5)' : ''}`}
                 >
                   {/* Hover tooltip */}
@@ -234,6 +235,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 </div>
               );
             })}
+            </div>
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-800/60 mt-2">

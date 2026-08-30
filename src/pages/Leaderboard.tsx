@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Trophy, Users, Flame, Gift, Loader2, AlertTriangle, Footprints, Brain, Heart, Sparkles, Pencil, Check } from 'lucide-react';
-import { fetchIndividualLeaderboard, fetchTeamLeaderboard, updateUserGoal } from '../services/dataService';
+import { Trophy, Users, Flame, Gift, Loader2, AlertTriangle, Footprints, Brain, Heart, Sparkles, Pencil, Check, Target } from 'lucide-react';
+import {
+  fetchIndividualLeaderboard,
+  fetchTeamLeaderboard,
+  updateUserGoal,
+  LeaderboardPeriod,
+} from '../services/dataService';
 import { IndividualLeaderboardEntry, TeamLeaderboardEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { UserProfileModal } from '../components/UserProfileModal';
 
 type Category = 'overall' | 'body' | 'mind' | 'heart' | 'soul' | 'team';
 
@@ -13,6 +19,12 @@ const CATEGORIES: { id: Category; label: string; Icon: React.ElementType }[] = [
   { id: 'heart', label: 'Heart Healers', Icon: Heart },
   { id: 'soul', label: 'Soul Seekers', Icon: Sparkles },
   { id: 'team', label: 'Teams', Icon: Users },
+];
+
+const PERIODS: { id: LeaderboardPeriod; label: string }[] = [
+  { id: 'week', label: 'This Week' },
+  { id: 'month', label: 'This Month' },
+  { id: 'all', label: 'Overall' },
 ];
 
 function scoreFor(entry: IndividualLeaderboardEntry, category: Category): number {
@@ -30,55 +42,24 @@ function scoreFor(entry: IndividualLeaderboardEntry, category: Category): number
   }
 }
 
-function Podium({ top3, category }: { top3: IndividualLeaderboardEntry[]; category: Category }) {
-  if (top3.length === 0) return null;
-  const [first, second, third] = top3;
-  const order = [second, first, third].filter(Boolean);
-  const heights = ['h-20', 'h-28', 'h-16'];
-  const medalColors = ['bg-slate-300', 'bg-amber-400', 'bg-orange-400'];
-  const rankOrder = [2, 1, 3];
-
-  return (
-    <div className="flex items-end justify-center gap-3 px-2 pt-4 pb-2">
-      {order.map((entry, i) => (
-        <div key={entry.userId} className="flex flex-col items-center flex-1 max-w-[110px]">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm mb-1.5 relative">
-            {entry.fullName[0]?.toUpperCase()}
-            <span
-              className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full ${medalColors[i]} text-slate-900 text-[10px] font-black flex items-center justify-center border-2 border-slate-950`}
-            >
-              {rankOrder[i]}
-            </span>
-          </div>
-          <p className="text-xs font-bold text-slate-200 text-center truncate w-full">{entry.fullName}</p>
-          <p className="text-[11px] font-black text-amber-400">{scoreFor(entry, category)} pts</p>
-          <div
-            className={`w-full ${heights[i]} rounded-t-xl mt-2 bg-gradient-to-t ${
-              rankOrder[i] === 1
-                ? 'from-amber-600 to-amber-400'
-                : rankOrder[i] === 2
-                ? 'from-slate-600 to-slate-400'
-                : 'from-orange-700 to-orange-500'
-            }`}
-          />
-        </div>
-      ))}
-    </div>
-  );
+interface LeaderboardProps {
+  onEditAsAdmin?: (userId: string) => void;
 }
 
-export function Leaderboard() {
+export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
   const { profile } = useAuth();
   const [category, setCategory] = useState<Category>('overall');
+  const [period, setPeriod] = useState<LeaderboardPeriod>('all');
   const [individuals, setIndividuals] = useState<IndividualLeaderboardEntry[]>([]);
   const [teams, setTeams] = useState<TeamLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+  const [selectedEntry, setSelectedEntry] = useState<IndividualLeaderboardEntry | null>(null);
 
-  const reload = () => {
+  const reload = (p: LeaderboardPeriod) => {
     setLoading(true);
-    return Promise.all([fetchIndividualLeaderboard(), fetchTeamLeaderboard()]).then(([ind, tm]) => {
+    return Promise.all([fetchIndividualLeaderboard(p), fetchTeamLeaderboard(p)]).then(([ind, tm]) => {
       setIndividuals(ind);
       setTeams(tm);
       setLoading(false);
@@ -87,20 +68,20 @@ export function Leaderboard() {
 
   useEffect(() => {
     let cancelled = false;
-    reload().then(() => {
+    reload(period).then(() => {
       if (cancelled) return;
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [period]);
 
   const handleSaveGoal = async () => {
     if (!profile) return;
     const value = parseInt(goalInput, 10);
     if (Number.isFinite(value) && value >= 0) {
       await updateUserGoal(profile.id, value);
-      await reload();
+      await reload(period);
     }
     setEditingGoal(false);
   };
@@ -112,6 +93,20 @@ export function Leaderboard() {
 
   const myEntry = useMemo(() => individuals.find((e) => e.userId === profile?.id), [individuals, profile]);
 
+  const collective = useMemo(() => {
+    const totalScore = individuals.reduce((sum, e) => sum + e.totalScore, 0);
+    const totalGoal = individuals.reduce((sum, e) => sum + e.goalPoints, 0);
+    const pct = totalGoal > 0 ? Math.min(100, Math.round((totalScore / totalGoal) * 100)) : 0;
+    return { totalScore, totalGoal, pct };
+  }, [individuals]);
+
+  const podiumEntries = [sortedByCategory[1], sortedByCategory[0], sortedByCategory[2]].filter(
+    Boolean
+  ) as IndividualLeaderboardEntry[];
+  const podiumHeights = ['h-20', 'h-28', 'h-16'];
+  const podiumMedalColors = ['bg-slate-300', 'bg-amber-400', 'bg-orange-400'];
+  const podiumRankOrder = [2, 1, 3];
+
   return (
     <div className="animate-fadeIn space-y-5">
       <div>
@@ -122,6 +117,41 @@ export function Leaderboard() {
         <p className="text-sm text-slate-400 mt-1">Live standings — everyone can see everyone's progress.</p>
       </div>
 
+      {/* Collective goal */}
+      <div className="bg-gradient-to-r from-indigo-600/15 to-purple-600/15 border border-indigo-500/20 rounded-2xl p-4">
+        <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+          <span className="flex items-center gap-1.5">
+            <Target className="w-3.5 h-3.5 text-indigo-400" /> Collective Challenge Goal
+          </span>
+          <span className="text-indigo-300">{collective.pct}% Reached</span>
+        </div>
+        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-400 rounded-full"
+            style={{ width: `${collective.pct}%` }}
+          />
+        </div>
+        <p className="text-[11px] text-slate-500 mt-1.5">
+          {collective.totalScore.toLocaleString()} of {collective.totalGoal.toLocaleString()} total points across everyone
+        </p>
+      </div>
+
+      {/* Period selector */}
+      <div className="flex items-center bg-slate-900/60 border border-slate-800 rounded-xl p-1 w-fit">
+        {PERIODS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPeriod(p.id)}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              period === p.id ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Category selector */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         {CATEGORIES.map(({ id, label, Icon }) => (
           <button
@@ -231,12 +261,43 @@ export function Leaderboard() {
         </div>
       ) : (
         <>
-          <Podium top3={sortedByCategory.slice(0, 3)} category={category} />
+          {podiumEntries.length > 0 && (
+            <div className="flex items-end justify-center gap-3 px-2 pt-4 pb-2">
+              {podiumEntries.map((entry, i) => (
+                <button
+                  key={entry.userId}
+                  onClick={() => setSelectedEntry(entry)}
+                  className="flex flex-col items-center flex-1 max-w-[110px]"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm mb-1.5 relative">
+                    {entry.fullName[0]?.toUpperCase()}
+                    <span
+                      className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full ${podiumMedalColors[i]} text-slate-900 text-[10px] font-black flex items-center justify-center border-2 border-slate-950`}
+                    >
+                      {podiumRankOrder[i]}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-200 text-center truncate w-full">{entry.fullName}</p>
+                  <p className="text-[11px] font-black text-amber-400">{scoreFor(entry, category)} pts</p>
+                  <div
+                    className={`w-full ${podiumHeights[i]} rounded-t-xl mt-2 bg-gradient-to-t ${
+                      podiumRankOrder[i] === 1
+                        ? 'from-amber-600 to-amber-400'
+                        : podiumRankOrder[i] === 2
+                        ? 'from-slate-600 to-slate-400'
+                        : 'from-orange-700 to-orange-500'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
             {sortedByCategory.map((e, i) => (
-              <div
+              <button
                 key={e.userId}
-                className={`flex items-center justify-between px-4 py-3.5 border-b border-slate-800 last:border-b-0 ${
+                onClick={() => setSelectedEntry(e)}
+                className={`w-full flex items-center justify-between px-4 py-3.5 border-b border-slate-800 last:border-b-0 text-left hover:bg-slate-800/40 transition-colors ${
                   e.userId === profile?.id ? 'bg-emerald-500/5' : ''
                 }`}
               >
@@ -260,13 +321,28 @@ export function Leaderboard() {
                   )}
                   <span className="font-black text-amber-400 text-sm">{scoreFor(e, category)} pts</span>
                 </div>
-              </div>
+              </button>
             ))}
             {sortedByCategory.length === 0 && (
               <div className="text-center py-10 text-sm text-slate-500">No scores logged yet.</div>
             )}
           </div>
         </>
+      )}
+
+      {selectedEntry && (
+        <UserProfileModal
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+          onEditAsAdmin={
+            onEditAsAdmin
+              ? (userId) => {
+                  onEditAsAdmin(userId);
+                  setSelectedEntry(null);
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

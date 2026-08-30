@@ -16,6 +16,10 @@ interface AuthContextValue {
   actingUserId: string | null;
   actingProfile: UserProfile | null;
   setActingUserId: (id: string | null) => void;
+  /** True when the person is viewing someone else's data without edit
+   * permission (i.e. not admin, and not viewing their own profile). */
+  isViewingReadOnly: boolean;
+  refreshMyProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (
     email: string,
@@ -39,12 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = useCallback(async (userId: string) => {
     const p = await fetchMyProfile(userId);
     setProfile(p);
-    if (p?.role === 'admin') {
-      const all = await fetchAllProfiles();
-      setAllProfiles(all);
-    } else {
-      setAllProfiles(p ? [p] : []);
-    }
+    // Everyone can read everyone's profiles (name/team/role) — RLS already
+    // allows this — needed so any user can see who's who on the leaderboard
+    // and view (read-only) another participant's scorecard.
+    const all = await fetchAllProfiles();
+    setAllProfiles(all);
     setActingUserIdState((prev) => prev || userId);
   }, []);
 
@@ -73,11 +76,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadProfile]);
 
   const refreshProfiles = useCallback(async () => {
-    if (profile?.role === 'admin') {
-      const all = await fetchAllProfiles();
-      setAllProfiles(all);
-    }
-  }, [profile]);
+    const all = await fetchAllProfiles();
+    setAllProfiles(all);
+  }, []);
+
+  /** Refetches the signed-in user's own profile — call this after anything
+   * that changes it (team assignment, name edit) so UI gated on `profile`
+   * (like the "pick your team" welcome modal) updates immediately instead
+   * of only after a manual page refresh. */
+  const refreshMyProfile = useCallback(async () => {
+    if (!session?.user) return;
+    const p = await fetchMyProfile(session.user.id);
+    setProfile(p);
+    setAllProfiles((prev) => (p ? prev.map((existing) => (existing.id === p.id ? p : existing)) : prev));
+  }, [session]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -115,6 +127,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const actingProfile = allProfiles.find((p) => p.id === actingUserId) || profile;
+  const isViewingReadOnly = Boolean(
+    actingUserId && profile && actingUserId !== profile.id && profile.role !== 'admin'
+  );
 
   const value: AuthContextValue = {
     session,
@@ -126,6 +141,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     actingUserId,
     actingProfile,
     setActingUserId: setActingUserIdState,
+    isViewingReadOnly,
+    refreshMyProfile,
     signIn,
     signUp,
     signInWithGoogle,

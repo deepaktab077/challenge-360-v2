@@ -38,7 +38,13 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
     setSubmitting(false);
 
     if (result.error) {
-      setError(result.error);
+      if (/rate limit/i.test(result.error)) {
+        setError(
+          'Too many signups too quickly — Supabase\'s free email service limits how many confirmation emails can go out per hour. Wait a few minutes and try again, or ask your admin to set up custom SMTP for higher limits (see INSTALLATION_GUIDE.md).'
+        );
+      } else {
+        setError(result.error);
+      }
       return;
     }
     if (result.needsEmailConfirmation) {

@@ -452,7 +452,22 @@ function rowToHealthReport(row: any): HealthReport {
 // that expose only score/qualifier fields, never raw private habit data.
 // ============================================================================
 
-export async function fetchIndividualLeaderboard(): Promise<IndividualLeaderboardEntry[]> {
+export type LeaderboardPeriod = 'week' | 'month' | 'all';
+
+function isDateInPeriod(dateStr: string, period: LeaderboardPeriod): boolean {
+  if (period === 'all') return true;
+  const d = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  if (period === 'month') {
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }
+  // 'week': same ISO week as today
+  return isoWeekKey(dateStr) === isoWeekKey(now.toISOString().slice(0, 10));
+}
+
+export async function fetchIndividualLeaderboard(
+  period: LeaderboardPeriod = 'all'
+): Promise<IndividualLeaderboardEntry[]> {
   const [{ data: profiles }, { data: teams }, { data: scores }, { data: workouts }, { data: charity }] =
     await Promise.all([
       supabase.from('profiles').select('*'),
@@ -503,6 +518,7 @@ export async function fetchIndividualLeaderboard(): Promise<IndividualLeaderboar
   };
 
   for (const row of scores || []) {
+    if (!isDateInPeriod(row.date, period)) continue;
     const weekKey = isoWeekKey(row.date);
     const week = getWeekAgg(row.user_id, weekKey);
     week.total += row.total_score || 0;
@@ -519,6 +535,7 @@ export async function fetchIndividualLeaderboard(): Promise<IndividualLeaderboar
 
   for (const w of workouts || []) {
     if (!w.is_morning) continue;
+    if (!isDateInPeriod(w.date, period)) continue;
     const weekKey = isoWeekKey(w.date);
     const week = getWeekAgg(w.user_id, weekKey);
     week.hasMorningWorkout = true;
@@ -593,8 +610,11 @@ export async function fetchIndividualLeaderboard(): Promise<IndividualLeaderboar
   return entries;
 }
 
-export async function fetchTeamLeaderboard(): Promise<TeamLeaderboardEntry[]> {
-  const [individuals, { data: teams }] = await Promise.all([fetchIndividualLeaderboard(), supabase.from('teams').select('*')]);
+export async function fetchTeamLeaderboard(period: LeaderboardPeriod = 'all'): Promise<TeamLeaderboardEntry[]> {
+  const [individuals, { data: teams }] = await Promise.all([
+    fetchIndividualLeaderboard(period),
+    supabase.from('teams').select('*'),
+  ]);
 
   const byTeam = new Map<string, { totalScore: number; memberCount: number; perfectDays: number }>();
   for (const entry of individuals) {
@@ -729,4 +749,40 @@ export async function toggleFeedReaction(postId: string, userId: string, emoji: 
       { onConflict: 'post_id,user_id,emoji' }
     );
   }
+}
+
+/** Latest feed post for a specific user — used by the leaderboard's "quick
+ * react" button so people can cheer someone on right from the rankings. */
+export async function fetchLatestFeedPostForUser(userId: string): Promise<FeedPost | null> {
+  const [{ data: posts }, { data: reactions }] = await Promise.all([
+    supabase.from('feed_posts').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1),
+    supabase.from('feed_reactions').select('*'),
+  ]);
+  const row = posts?.[0];
+  if (!row) return null;
+
+  const postReactions: FeedReaction[] = (reactions || [])
+    .filter((r: any) => r.post_id === row.id)
+    .map((r: any) => ({ id: r.id, postId: r.post_id, userId: r.user_id, emoji: r.emoji, createdAt: r.created_at }));
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    date: row.date,
+    totalScore: row.total_score,
+    allDimensionsCompleted: row.all_dimensions_completed,
+    kind: row.kind,
+    message: row.message,
+    createdAt: row.created_at,
+    reactions: postReactions,
+  };
+}
+
+/** Collective progress across every participant — sum of everyone's total
+ * score vs the sum of everyone's personal goal. */
+export async function fetchCollectiveGoalProgress(): Promise<{ totalScore: number; totalGoal: number }> {
+  const entries = await fetchIndividualLeaderboard('all');
+  const totalScore = entries.reduce((sum, e) => sum + e.totalScore, 0);
+  const totalGoal = entries.reduce((sum, e) => sum + e.goalPoints, 0);
+  return { totalScore, totalGoal };
 }

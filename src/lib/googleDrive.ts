@@ -12,8 +12,14 @@ declare global {
 let gisScriptPromise: Promise<void> | null = null;
 let cachedAccessToken: { token: string; expiresAt: number } | null = null;
 let cachedFolderId: string | null = null;
+let tokenClient: any = null;
 
-function loadGoogleIdentityScript(): Promise<void> {
+/** Kicks off loading the Google Identity Services script in the background.
+ * Call this as early as possible (e.g. on component mount) so that by the
+ * time the user actually clicks "Connect Google Drive", the script is
+ * already loaded and the OAuth popup can open synchronously within the
+ * click handler — popups triggered after an `await` get blocked by browsers. */
+export function preloadGoogleIdentity(): Promise<void> {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
   if (gisScriptPromise) return gisScriptPromise;
 
@@ -29,42 +35,61 @@ function loadGoogleIdentityScript(): Promise<void> {
   return gisScriptPromise;
 }
 
-/** Opens the Google consent popup (only if needed) and returns a short-lived
- * Drive access token scoped to files this app creates (drive.file). */
-export async function getDriveAccessToken(): Promise<string> {
-  if (!googleClientId) {
-    throw new Error(
-      'Google Drive isn\'t configured yet. Ask your admin to set VITE_GOOGLE_CLIENT_ID.'
-    );
-  }
+export function isGoogleIdentityReady(): boolean {
+  return Boolean(window.google?.accounts?.oauth2);
+}
 
-  if (cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 30_000) {
-    return cachedAccessToken.token;
-  }
+export function hasDriveAccessToken(): boolean {
+  return Boolean(cachedAccessToken && cachedAccessToken.expiresAt > Date.now() + 30_000);
+}
 
-  await loadGoogleIdentityScript();
-
+/** MUST be called directly inside a click handler (no `await` before it) —
+ * this is what lets the Google consent popup open instead of getting
+ * silently blocked by the browser's popup blocker. */
+export function requestDriveAccess(): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (!googleClientId) {
+      reject(new Error("Google Drive isn't configured yet. Ask your admin to set VITE_GOOGLE_CLIENT_ID."));
+      return;
+    }
+    if (hasDriveAccessToken()) {
+      resolve(cachedAccessToken!.token);
+      return;
+    }
+    if (!isGoogleIdentityReady()) {
+      reject(new Error('Still loading Google sign-in — please try again in a second.'));
+      return;
+    }
+
     try {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: googleClientId,
-        scope: DRIVE_SCOPE,
-        callback: (response: any) => {
-          if (response.error) {
-            reject(new Error(response.error_description || response.error));
-            return;
-          }
-          cachedAccessToken = {
-            token: response.access_token,
-            expiresAt: Date.now() + (response.expires_in || 3600) * 1000,
-          };
-          resolve(response.access_token);
-        },
-        error_callback: (err: any) => {
-          reject(new Error(err?.message || 'Google sign-in was cancelled or failed'));
-        },
-      });
-      tokenClient.requestAccessToken({ prompt: cachedAccessToken ? '' : 'consent' });
+      if (!tokenClient) {
+        tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: DRIVE_SCOPE,
+          callback: () => {}, // overridden per-request below
+        });
+      }
+      tokenClient.callback = (response: any) => {
+        if (response.error) {
+          reject(new Error(response.error_description || response.error));
+          return;
+        }
+        cachedAccessToken = {
+          token: response.access_token,
+          expiresAt: Date.now() + (response.expires_in || 3600) * 1000,
+        };
+        resolve(response.access_token);
+      };
+      tokenClient.error_callback = (err: any) => {
+        reject(
+          new Error(
+            err?.type === 'popup_failed_to_open'
+              ? 'Your browser blocked the Google sign-in popup. Please allow popups for this site and try again.'
+              : err?.message || 'Google sign-in was cancelled or failed.'
+          )
+        );
+      };
+      tokenClient.requestAccessToken({ prompt: '' });
     } catch (err) {
       reject(err);
     }
@@ -115,10 +140,15 @@ export interface DriveUploadResult {
   driveThumbnailLink: string;
 }
 
-/** Uploads a File directly into the signed-in user's own Google Drive, inside
- * a "Challenge 360 - Health Reports" folder the app creates on first use. */
+/** Uploads a File into the already-authorized Google Drive session. Call
+ * requestDriveAccess() from a direct click handler first — this function
+ * itself never opens a popup, so it's safe to call from a file-input
+ * onChange handler (which fires asynchronously after the native picker). */
 export async function uploadHealthReportToDrive(file: File): Promise<DriveUploadResult> {
-  const accessToken = await getDriveAccessToken();
+  if (!hasDriveAccessToken()) {
+    throw new Error('Not connected to Google Drive yet — tap "Connect Google Drive" first.');
+  }
+  const accessToken = cachedAccessToken!.token;
   const folderId = await ensureAppFolder(accessToken);
 
   const metadata = {
