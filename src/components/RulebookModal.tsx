@@ -84,7 +84,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
                 icon={<Dumbbell className="w-4 h-4" />}
                 label="Strength / Cardio"
                 points="Qualifier"
-                description="Minimum 45-minute session, at least 2x/week. If a week falls short, that week's points (including any morning workout bonus) don't count on the leaderboard."
+                description="Minimum 45-minute session, at least 2x/week. Once a week ends, if it fell short, that week's points (including any morning workout bonus) are excluded from the leaderboard — the current week in progress is never judged early."
               />
               <RuleRow
                 icon={<Footprints className="w-4 h-4" />}
@@ -198,7 +198,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
             <h4 className="text-sm font-black text-slate-200 uppercase tracking-wide mb-1">Critical Qualifiers</h4>
             <div className="bg-rose-500/10 border border-rose-500/30 text-rose-200 rounded-xl p-4 text-xs space-y-1.5">
               <p>⚠️ These must be met — they directly affect your leaderboard score:</p>
-              <p>1️⃣ <strong>Weekly Strength Qualifier</strong>: minimum 2 × 45-minute strength/cardio sessions every week. Miss it, and that week's entire point total (plus any morning workout bonus) is excluded from the leaderboard.</p>
+              <p>1️⃣ <strong>Weekly Strength Qualifier</strong>: minimum 2 × 45-minute strength/cardio sessions every week. Miss it by the time that week ends, and the whole week's points (plus any morning workout bonus) are excluded from the leaderboard. The week currently in progress always counts normally until it's over.</p>
               <p>2️⃣ <strong>Monthly Charity Qualifier</strong>: at least 1 community giving act during September, required to appear on the final leaderboard.</p>
             </div>
           </section>

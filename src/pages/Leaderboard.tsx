@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Trophy, Users, Flame, Gift, Loader2, AlertTriangle, Footprints, Brain, Heart, Sparkles, Pencil, Check, Target } from 'lucide-react';
+import { Trophy, Users, Flame, Gift, Loader2, AlertTriangle, Footprints, Brain, Heart, Sparkles, Pencil, Check, Target, RefreshCw } from 'lucide-react';
 import {
   fetchIndividualLeaderboard,
   fetchTeamLeaderboard,
@@ -56,6 +56,7 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<IndividualLeaderboardEntry | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const reload = (p: LeaderboardPeriod) => {
     setLoading(true);
@@ -63,6 +64,7 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
       setIndividuals(ind);
       setTeams(tm);
       setLoading(false);
+      setLastUpdated(new Date());
     });
   };
 
@@ -71,8 +73,16 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
     reload(period).then(() => {
       if (cancelled) return;
     });
+    // Keep standings live for a community challenge — refresh automatically
+    // every 45s, plus whenever the tab regains focus (e.g. coming back after
+    // logging a day), on top of the manual refresh button.
+    const interval = setInterval(() => reload(period), 45000);
+    const onFocus = () => reload(period);
+    window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
     };
   }, [period]);
 
@@ -114,7 +124,20 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
           <Trophy className="w-6 h-6 text-amber-400" />
           Leaderboard
         </h1>
-        <p className="text-sm text-slate-400 mt-1">Live standings — everyone can see everyone's progress.</p>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <p className="text-sm text-slate-400">Live standings — everyone can see everyone's progress.</p>
+          <button
+            onClick={() => reload(period)}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-400 transition-colors flex-shrink-0"
+            title="Refresh now"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            {lastUpdated
+              ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Collective goal */}

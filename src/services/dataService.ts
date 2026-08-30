@@ -134,7 +134,10 @@ export async function saveDailyLog(userId: string, log: DailyLog, fullName?: str
     strength_cardio_completed: !!log.body.strengthCardioCompleted,
     updated_at: new Date().toISOString(),
   };
-  await supabase.from('daily_logs').upsert(payload, { onConflict: 'user_id,date' });
+  const { error } = await supabase.from('daily_logs').upsert(payload, { onConflict: 'user_id,date' });
+  if (error) {
+    throw new Error(`Couldn't save today's log: ${error.message}`);
+  }
   if (fullName) {
     await upsertFeedPostForLog(userId, fullName, log);
   }
@@ -547,6 +550,12 @@ export async function fetchIndividualLeaderboard(
 
   // --- Step 2: apply the weekly strength/cardio qualifier --------------------
   // "If a week has <2 strength sessions, that week's points don't count."
+  // Important: only enforce this for weeks that have already ENDED — the
+  // current, still-in-progress week should never be zeroed out just because
+  // there hasn't been time to log 2 sessions yet. That would make everyone's
+  // score look like 0 for the first several days of every week.
+  const currentWeekKey = isoWeekKey(new Date().toISOString().slice(0, 10));
+
   const entries: IndividualLeaderboardEntry[] = (profiles || [])
     .filter((p: any) => p.is_active)
     .map((p: any) => {
@@ -562,9 +571,10 @@ export async function fetchIndividualLeaderboard(
       let disqualifiedWeeks = 0;
 
       if (userWeeks) {
-        for (const week of userWeeks.values()) {
+        for (const [weekKey, week] of userWeeks.entries()) {
           daysLogged += week.daysLogged;
-          const qualifies = week.strengthCardioDays >= STRENGTH_CARDIO_WEEKLY_MIN_SESSIONS;
+          const isCompletedWeek = weekKey !== currentWeekKey;
+          const qualifies = !isCompletedWeek || week.strengthCardioDays >= STRENGTH_CARDIO_WEEKLY_MIN_SESSIONS;
           if (!qualifies) {
             disqualifiedWeeks += 1;
             continue; // this week's points (and its morning-workout bonus) don't count

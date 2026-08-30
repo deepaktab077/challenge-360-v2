@@ -42,6 +42,7 @@ export default function App() {
 
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [dismissedTeamPrompt, setDismissedTeamPrompt] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // State
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
@@ -153,9 +154,14 @@ export default function App() {
         triggerConfetti();
       }
       setDailyLogs((prev) => ({ ...prev, [updatedLog.date]: updatedLog }));
-      await saveDailyLog(targetUserId, updatedLog, actingProfile?.fullName || profile?.fullName);
+      try {
+        await saveDailyLog(targetUserId, updatedLog, actingProfile?.fullName || profile?.fullName);
+        setSaveError(null);
+      } catch (err: any) {
+        setSaveError(err?.message || "Couldn't save your changes — check your connection and try again.");
+      }
     },
-    [dailyLogs, triggerConfetti, targetUserId]
+    [dailyLogs, triggerConfetti, targetUserId, actingProfile, profile]
   );
 
   const handleResetDay = useCallback(() => {
@@ -287,6 +293,15 @@ export default function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full">
+        {saveError && (
+          <div className="mb-4 flex items-center justify-between gap-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold px-4 py-2.5 rounded-xl">
+            <span>⚠️ {saveError}</span>
+            <button onClick={() => setSaveError(null)} className="underline hover:no-underline flex-shrink-0">
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {isAdmin && actingUserId && actingUserId !== profile?.id && (
           <div className="mb-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold px-4 py-2.5 rounded-xl">
             <span>
