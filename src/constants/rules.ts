@@ -235,6 +235,17 @@ export function scoreMeditation(minutes: number): number {
 // Full daily breakdown
 // ----------------------------------------------------------------------------
 
+/** "360° Balance Score" — rewards consistency across all four pillars rather
+ * than raw point volume. Someone who maxes out Body while ignoring Mind/
+ * Heart/Soul should have a high total but a low balance score. */
+export function calculateBalanceScore(bodyScore: number, mindScore: number, heartScore: number, soulScore: number): number {
+  const bodyPct = Math.min(1, bodyScore / 40);
+  const mindPct = Math.min(1, mindScore / 20);
+  const heartPct = Math.min(1, heartScore / 10);
+  const soulPct = Math.min(1, soulScore / 10);
+  return Math.round(((bodyPct + mindPct + heartPct + soulPct) / 4) * 100);
+}
+
 export function calculateDailyScore(log: DailyLog | null | undefined): PillarScoreBreakdown {
   if (!log) {
     return {

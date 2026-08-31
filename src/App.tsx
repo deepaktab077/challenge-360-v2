@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import { Download, BookMarked } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import {
   loadAllDailyLogs,
@@ -13,19 +14,18 @@ import {
   addHealthReport,
   deleteHealthReport,
   fetchAllTeams,
+  fetchIndividualLeaderboard,
 } from './services/dataService';
 import { DailyLog, GroupWorkout, MonthlyCharityRecord, HealthReport, Team } from './types';
 import { getTodayDateStr, getMonthKey, getWeekRange, addDays } from './utils/dateUtils';
-import { calculateDailyScore, createEmptyDailyLog, MORNING_WORKOUT_BONUS_POINTS } from './constants/rules';
+import { calculateDailyScore, createEmptyDailyLog } from './constants/rules';
 
-import { Navbar, ActiveView } from './components/Navbar';
+import { Sidebar, MenuButton, ActiveView, AdminView } from './components/Sidebar';
 import { DateNavigator } from './components/DateNavigator';
-import { ScoreOverviewBanner } from './components/ScoreOverviewBanner';
 import { DailyScorecard } from './components/DailyScorecard';
 import { HealthReportUpload } from './components/HealthReportUpload';
 import { AnalyticsView } from './components/AnalyticsView';
 import { HistoryCalendarView } from './components/HistoryCalendarView';
-import { GroupWorkoutModal } from './components/GroupWorkoutModal';
 import { MonthlyCharityModal } from './components/MonthlyCharityModal';
 import { RulebookModal } from './components/RulebookModal';
 import { ExportImportModal } from './components/ExportImportModal';
@@ -34,35 +34,89 @@ import { TEAMS_ENABLED } from './constants/features';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { AdminPanel } from './pages/AdminPanel';
+import { AdminOverview } from './pages/AdminOverview';
+import { AdminStub, AdminRules } from './pages/AdminStub';
 import { Leaderboard } from './pages/Leaderboard';
 import { Feed } from './pages/Feed';
+import { Today } from './pages/Today';
+import { Qualifiers } from './pages/Qualifiers';
+import { WeeklyReport } from './pages/WeeklyReport';
+import { Beyond } from './pages/Beyond';
+import { Profile } from './pages/Profile';
+
+function isoWeekKey(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = new Date(target.getFullYear(), 0, 4);
+  const weekNumber =
+    1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getDay() + 6) % 7)) / 7);
+  return `${target.getFullYear()}-W${weekNumber}`;
+}
+
+const PAGE_TITLES: Record<ActiveView, [string, string]> = {
+  today: ['Today', 'Your complete well-being, in one view.'],
+  checkin: ['Daily Check-in', 'Log once. Let the app calculate the rest.'],
+  leaderboard: ['Leaderboard', 'Compete on points — and on balance.'],
+  feed: ['Community', 'Positive accountability, without the noise.'],
+  qualifiers: ['Qualifiers', 'Protect your weekly score.'],
+  report: ['Weekly Report', 'See where you are thriving and where to rebalance.'],
+  analytics: ['Trends', 'Your 30-day performance history.'],
+  history: ['Calendar', 'Pillar score calendar & day completion history.'],
+  beyond: ['Beyond', 'Reflect • Evolve • Inspire'],
+  profile: ['Profile & Privacy', 'Your challenge preferences and data.'],
+  admin: ['Admin', 'Community management.'],
+};
+
+const ADMIN_TITLES: Record<AdminView, [string, string]> = {
+  overview: ['Admin Overview', 'Community health at a glance.'],
+  participants: ['Participants', 'Manage access and eligibility.'],
+  rules: ['Challenge Rules', 'Reference for how scoring currently works.'],
+  events: ['Events & Bonuses', 'Create group activities and power bonuses.'],
+  moderation: ['Proof & Moderation', 'Review evidence and score exceptions.'],
+  analytics: ['Analytics', 'Participation, balance and drop-off.'],
+  announcements: ['Announcements', 'Keep the community aligned.'],
+  audit: ['Audit Log', 'Every privileged change, recorded.'],
+  integrations: ['Integrations', 'Wearables, notifications, AI and exports.'],
+};
 
 export default function App() {
-  const { session, profile, isAdmin, loading, allProfiles, actingUserId, actingProfile, setActingUserId, signOut, refreshMyProfile } =
-    useAuth();
+  const {
+    session,
+    profile,
+    isAdmin,
+    loading,
+    actingUserId,
+    actingProfile,
+    setActingUserId,
+    signOut,
+    refreshMyProfile,
+    isViewingReadOnly,
+  } = useAuth();
 
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [dismissedTeamPrompt, setDismissedTeamPrompt] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // State
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [groupWorkouts, setGroupWorkouts] = useState<GroupWorkout[]>([]);
   const [charityRecords, setCharityRecords] = useState<MonthlyCharityRecord[]>([]);
   const [healthReports, setHealthReports] = useState<HealthReport[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [myRank, setMyRank] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateStr());
   const [activeView, setActiveView] = useState<ActiveView>('today');
+  const [inAdminArea, setInAdminArea] = useState(false);
+  const [activeAdminView, setActiveAdminView] = useState<AdminView>('overview');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Modals
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
-  const [isWorkoutModalOpen, setIsWorkoutModalOpen] = useState(false);
   const [isCharityModalOpen, setIsCharityModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const targetUserId = actingUserId || profile?.id || null;
 
-  // Load data whenever the acting (viewed) user changes
   const reloadData = useCallback(async () => {
     if (!targetUserId) return;
     const [logs, workouts, charities, reports] = await Promise.all([
@@ -82,41 +136,54 @@ export default function App() {
   }, [reloadData]);
 
   useEffect(() => {
-    fetchAllTeams().then(setTeams);
+    if (TEAMS_ENABLED) fetchAllTeams().then(setTeams);
   }, []);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    fetchIndividualLeaderboard('all').then((entries) => {
+      const mine = entries.find((e) => e.userId === (targetUserId || profile.id));
+      setMyRank(mine?.rank ?? null);
+    });
+  }, [profile?.id, targetUserId, dailyLogs]);
 
   const myTeamName = useMemo(
     () => (TEAMS_ENABLED ? teams.find((t) => t.id === (actingProfile?.teamId ?? profile?.teamId))?.name || null : null),
     [teams, actingProfile, profile]
   );
 
-  // Active Daily Log
-  const currentLog = useMemo(() => {
-    return dailyLogs[selectedDate] || createEmptyDailyLog(selectedDate);
-  }, [dailyLogs, selectedDate]);
-
-  // Current Score Breakdown
+  const currentLog = useMemo(() => dailyLogs[selectedDate] || createEmptyDailyLog(selectedDate), [dailyLogs, selectedDate]);
   const currentScoreBreakdown = useMemo(() => calculateDailyScore(currentLog), [currentLog]);
-
-  // Active Month & Active Week
   const activeMonthKey = useMemo(() => getMonthKey(selectedDate), [selectedDate]);
   const activeWeek = useMemo(() => getWeekRange(selectedDate), [selectedDate]);
 
-  // Monthly charity record for active month
   const currentCharityRecord = useMemo(
     () => charityRecords.find((c) => c.monthKey === activeMonthKey),
     [charityRecords, activeMonthKey]
   );
 
-  // Weekly group workouts — morning workout bonus is capped at ONE award (+50) per week
-  const thisWeekWorkouts = useMemo(
-    () => groupWorkouts.filter((w) => activeWeek.days.includes(w.date)),
-    [groupWorkouts, activeWeek]
-  );
-  const thisWeekHasMorningWorkout = thisWeekWorkouts.some((w) => w.isMorning);
-  const thisWeekWorkoutBonus = thisWeekHasMorningWorkout ? MORNING_WORKOUT_BONUS_POINTS : 0;
+  const thisWeekWorkouts = useMemo(() => groupWorkouts.filter((w) => activeWeek.days.includes(w.date)), [groupWorkouts, activeWeek]);
+  const thisWeekMorningEntry = thisWeekWorkouts.find((w) => w.isMorning);
+  const thisWeekHasMorningWorkout = !!thisWeekMorningEntry;
 
-  // Streak Calculation
+  const strengthSessionsThisWeek = useMemo(
+    () => activeWeek.days.filter((d) => dailyLogs[d]?.body?.strengthCardioCompleted).length,
+    [dailyLogs, activeWeek]
+  );
+
+  const perfectDaysThisWeek = useMemo(
+    () => activeWeek.days.filter((d) => calculateDailyScore(dailyLogs[d]).completeDayBonus > 0).length,
+    [dailyLogs, activeWeek]
+  );
+
+  const monthTotal = useMemo(() => {
+    let sum = 0;
+    for (const [date, log] of Object.entries(dailyLogs) as [string, DailyLog][]) {
+      if (getMonthKey(date) === activeMonthKey) sum += calculateDailyScore(log).totalDailyScore;
+    }
+    return sum;
+  }, [dailyLogs, activeMonthKey]);
+
   const currentStreak = useMemo(() => {
     const todayStr = getTodayDateStr();
     let streak = 0;
@@ -135,12 +202,7 @@ export default function App() {
 
   const triggerConfetti = useCallback(() => {
     try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#10b981', '#6366f1', '#f43f5e', '#f59e0b', '#fbbf24'],
-      });
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ['#315e56', '#3f6087', '#985365', '#725f8d', '#9a7950'] });
     } catch {
       // safe fallback
     }
@@ -151,9 +213,7 @@ export default function App() {
       if (!targetUserId) return;
       const prevScore = calculateDailyScore(dailyLogs[updatedLog.date]);
       const nextScore = calculateDailyScore(updatedLog);
-      if (!prevScore.allDimensionsCompleted && nextScore.allDimensionsCompleted) {
-        triggerConfetti();
-      }
+      if (!prevScore.allDimensionsCompleted && nextScore.allDimensionsCompleted) triggerConfetti();
       setDailyLogs((prev) => ({ ...prev, [updatedLog.date]: updatedLog }));
       try {
         await saveDailyLog(targetUserId, updatedLog, actingProfile?.fullName || profile?.fullName);
@@ -165,27 +225,24 @@ export default function App() {
     [dailyLogs, triggerConfetti, targetUserId, actingProfile, profile]
   );
 
-  const handleResetDay = useCallback(() => {
-    handleUpdateLog(createEmptyDailyLog(selectedDate));
-  }, [selectedDate, handleUpdateLog]);
-
-  const handleAddWorkout = useCallback(
-    async (workout: Omit<GroupWorkout, 'id' | 'createdAt'>) => {
-      if (!targetUserId) return;
-      const created = await addGroupWorkout(targetUserId, workout);
+  const handleToggleWorkout = useCallback(async () => {
+    if (!targetUserId || isViewingReadOnly) return;
+    if (thisWeekMorningEntry) {
+      await deleteGroupWorkout(targetUserId, thisWeekMorningEntry.id);
+      setGroupWorkouts((prev) => prev.filter((w) => w.id !== thisWeekMorningEntry.id));
+    } else {
+      const created = await addGroupWorkout(targetUserId, {
+        title: 'Morning Group Workout',
+        groupName: 'Group',
+        workoutType: 'Group Session',
+        durationMinutes: 45,
+        date: getTodayDateStr(),
+        isMorning: true,
+        notes: '',
+      });
       setGroupWorkouts((prev) => [created, ...prev]);
-    },
-    [targetUserId]
-  );
-
-  const handleDeleteWorkout = useCallback(
-    async (id: string) => {
-      if (!targetUserId) return;
-      await deleteGroupWorkout(targetUserId, id);
-      setGroupWorkouts((prev) => prev.filter((w) => w.id !== id));
-    },
-    [targetUserId]
-  );
+    }
+  }, [targetUserId, thisWeekMorningEntry, isViewingReadOnly]);
 
   const handleSaveCharityRecord = useCallback(
     async (record: MonthlyCharityRecord) => {
@@ -204,6 +261,20 @@ export default function App() {
     [targetUserId]
   );
 
+  const handleToggleCharity = useCallback(() => {
+    if (isViewingReadOnly) return;
+    handleSaveCharityRecord({
+      id: currentCharityRecord?.id || '',
+      monthKey: activeMonthKey,
+      completed: !currentCharityRecord?.completed,
+      title: currentCharityRecord?.title || 'Community giving',
+      category: currentCharityRecord?.category || 'other',
+      amountOrHours: currentCharityRecord?.amountOrHours || '',
+      notes: currentCharityRecord?.notes || '',
+      completedDate: getTodayDateStr(),
+    });
+  }, [currentCharityRecord, activeMonthKey, handleSaveCharityRecord, isViewingReadOnly]);
+
   const handleAddHealthReport = useCallback(
     async (report: Omit<HealthReport, 'id' | 'uploadedAt'>) => {
       if (!targetUserId) return;
@@ -214,19 +285,18 @@ export default function App() {
   );
 
   const handleDeleteHealthReport = useCallback(
-    async (id: string) => {
+    async (id: string, storagePath: string) => {
       if (!targetUserId) return;
-      await deleteHealthReport(targetUserId, id);
+      await deleteHealthReport(targetUserId, id, storagePath);
       setHealthReports((prev) => prev.filter((r) => r.id !== id));
     },
     [targetUserId]
   );
 
-  // --- Auth gating -----------------------------------------------------------
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-slate-400 text-sm">Loading…</div>
+      <div className="app-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div className="sub">Loading…</div>
       </div>
     );
   }
@@ -241,13 +311,11 @@ export default function App() {
 
   if (profile && !profile.isActive) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
-        <div className="text-center max-w-sm">
-          <h1 className="text-lg font-bold text-slate-100 mb-2">Account Disabled</h1>
-          <p className="text-sm text-slate-500 mb-6">
-            Your account has been disabled by an admin. Contact your challenge admin for help.
-          </p>
-          <button onClick={signOut} className="text-sm font-semibold text-indigo-600 hover:underline">
+      <div className="app-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div className="card" style={{ maxWidth: 360, textAlign: 'center' }}>
+          <h2>Account Disabled</h2>
+          <p className="sub">Your account has been disabled by an admin. Contact your challenge admin for help.</p>
+          <button className="btn-primary" onClick={signOut} style={{ marginTop: 10 }}>
             Sign out
           </button>
         </div>
@@ -255,11 +323,11 @@ export default function App() {
     );
   }
 
-  const needsTeamCompletion =
-    TEAMS_ENABLED && !!profile && profile.role === 'user' && !profile.teamId && !dismissedTeamPrompt;
+  const needsTeamCompletion = TEAMS_ENABLED && !!profile && profile.role === 'user' && !profile.teamId && !dismissedTeamPrompt;
+  const [title, subtitle] = inAdminArea ? ADMIN_TITLES[activeAdminView] : PAGE_TITLES[activeView];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-600 selection:text-white flex flex-col justify-between">
+    <div className="app-shell">
       {needsTeamCompletion && profile && (
         <CompleteProfileModal
           userId={profile.id}
@@ -272,142 +340,178 @@ export default function App() {
         />
       )}
 
-      <Navbar
+      <Sidebar
         activeView={activeView}
         setActiveView={setActiveView}
-        openRulesModal={() => setIsRulesModalOpen(true)}
-        openWorkoutModal={() => setIsWorkoutModalOpen(true)}
-        openCharityModal={() => setIsCharityModalOpen(true)}
-        openExportModal={() => setIsExportModalOpen(true)}
-        currentStreak={currentStreak}
-        currentCharityQualified={currentCharityRecord?.completed ?? false}
-        thisWeekWorkoutBonus={thisWeekWorkoutBonus}
         isAdmin={isAdmin}
+        onOpenAdmin={() => setInAdminArea((v) => !v)}
+        inAdminArea={inAdminArea}
+        activeAdminView={activeAdminView}
+        setActiveAdminView={setActiveAdminView}
         myName={actingProfile?.fullName || profile?.fullName}
-        myTeamName={myTeamName}
         onSignOut={signOut}
-        allProfiles={allProfiles}
-        actingUserId={actingUserId}
-        onSwitchActingUser={(id) => {
-          setActingUserId(id);
-          setActiveView('today');
-        }}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 w-full">
-        {saveError && (
-          <div className="mb-4 flex items-center justify-between gap-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold px-4 py-2.5 rounded-xl">
-            <span>⚠️ {saveError}</span>
-            <button onClick={() => setSaveError(null)} className="underline hover:no-underline flex-shrink-0">
-              Dismiss
+      <main className="app-main">
+        <header className="app-top">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <MenuButton onClick={() => setMobileOpen(true)} />
+            <div>
+              <h1>{title}</h1>
+              <p>{subtitle}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button className="btn-secondary" onClick={() => setIsRulesModalOpen(true)} title="Official rules">
+              <BookMarked className="w-4 h-4" />
+            </button>
+            <button className="btn-secondary" onClick={() => setIsExportModalOpen(true)} title="Export data">
+              <Download className="w-4 h-4" />
             </button>
           </div>
-        )}
+        </header>
 
-        {isAdmin && actingUserId && actingUserId !== profile?.id && (
-          <div className="mb-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-semibold px-4 py-2.5 rounded-xl">
-            <span>
-              Viewing & editing <strong>{actingProfile?.fullName || actingProfile?.email}</strong>'s scorecard as
-              admin.
-            </span>
-            <button onClick={() => setActingUserId(profile!.id)} className="underline hover:no-underline">
-              Back to my own data
-            </button>
-          </div>
-        )}
+        <section className="app-wrap">
+          {saveError && (
+            <div className="notice warn" style={{ marginBottom: 14 }}>
+              ⚠️ {saveError}{' '}
+              <button onClick={() => setSaveError(null)} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}>
+                Dismiss
+              </button>
+            </div>
+          )}
 
-        {activeView === 'today' && (
-          <div className="animate-fadeIn space-y-6">
-            <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} dailyLogs={dailyLogs} />
+          {isAdmin && actingUserId && actingUserId !== profile?.id && (
+            <div className="notice warn" style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>
+                Viewing &amp; editing <strong>{actingProfile?.fullName || actingProfile?.email}</strong>'s scorecard as admin.
+              </span>
+              <button
+                onClick={() => setActingUserId(profile!.id)}
+                style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer' }}
+              >
+                Back to my own data
+              </button>
+            </div>
+          )}
 
-            <ScoreOverviewBanner
-              scoreBreakdown={currentScoreBreakdown}
-              onMarkAllComplete={() => {}}
-              onResetDay={handleResetDay}
-              onTriggerConfetti={triggerConfetti}
-            />
+          {inAdminArea ? (
+            <>
+              {activeAdminView === 'overview' && <AdminOverview />}
+              {activeAdminView === 'participants' && (
+                <AdminPanel
+                  onViewUserData={(userId) => {
+                    setActingUserId(userId);
+                    setInAdminArea(false);
+                    setActiveView('today');
+                  }}
+                />
+              )}
+              {activeAdminView === 'rules' && <AdminRules />}
+              {(['events', 'moderation', 'analytics', 'announcements', 'audit', 'integrations'] as const).includes(
+                activeAdminView as any
+              ) && <AdminStub kind={activeAdminView as any} />}
+            </>
+          ) : (
+            <>
+              {activeView === 'today' && (
+                <div className="animate-fadeIn" style={{ display: 'grid', gap: 16 }}>
+                  <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} dailyLogs={dailyLogs} />
+                  <Today
+                    currentLog={currentLog}
+                    score={currentScoreBreakdown}
+                    currentStreak={currentStreak}
+                    myRank={myRank}
+                    monthTotal={monthTotal}
+                    thisWeekWorkoutDone={thisWeekHasMorningWorkout}
+                    onToggleWorkout={handleToggleWorkout}
+                    perfectDaysThisWeek={perfectDaysThisWeek}
+                    strengthSessionsThisWeek={strengthSessionsThisWeek}
+                    onGoToCheckin={() => setActiveView('checkin')}
+                    readOnly={isViewingReadOnly}
+                  />
+                </div>
+              )}
 
-            <DailyScorecard
-              currentLog={currentLog}
-              onUpdateLog={handleUpdateLog}
-              openCharityModal={() => setIsCharityModalOpen(true)}
-              currentCharityRecord={currentCharityRecord}
-              monthKey={activeMonthKey}
-            />
+              {activeView === 'checkin' && (
+                <div className="animate-fadeIn" style={{ display: 'grid', gap: 16 }}>
+                  <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} dailyLogs={dailyLogs} />
+                  <DailyScorecard
+                    currentLog={currentLog}
+                    onUpdateLog={handleUpdateLog}
+                    openCharityModal={() => setIsCharityModalOpen(true)}
+                    currentCharityRecord={currentCharityRecord}
+                    monthKey={activeMonthKey}
+                    onDone={() => setActiveView('today')}
+                    readOnly={isViewingReadOnly}
+                  />
+                  <HealthReportUpload
+                    date={selectedDate}
+                    userId={targetUserId || ''}
+                    reports={healthReports}
+                    onAdd={handleAddHealthReport}
+                    onDelete={handleDeleteHealthReport}
+                    readOnly={isViewingReadOnly}
+                  />
+                </div>
+              )}
 
-            <HealthReportUpload
-              date={selectedDate}
-              reports={healthReports}
-              onAdd={handleAddHealthReport}
-              onDelete={handleDeleteHealthReport}
-            />
-          </div>
-        )}
+              {activeView === 'leaderboard' && (
+                <Leaderboard
+                  onEditAsAdmin={(userId) => {
+                    setActingUserId(userId);
+                    setActiveView('today');
+                  }}
+                />
+              )}
 
-        {activeView === 'leaderboard' && (
-          <Leaderboard
-            onEditAsAdmin={(userId) => {
-              setActingUserId(userId);
-              setActiveView('today');
-            }}
-          />
-        )}
+              {activeView === 'feed' && <Feed />}
 
-        {activeView === 'feed' && <Feed />}
+              {activeView === 'qualifiers' && (
+                <Qualifiers
+                  strengthSessionsThisWeek={strengthSessionsThisWeek}
+                  charityCompleted={currentCharityRecord?.completed ?? false}
+                  onToggleCharity={handleToggleCharity}
+                  disqualifiedWeeksTotal={0}
+                  readOnly={isViewingReadOnly}
+                />
+              )}
 
-        {activeView === 'analytics' && (
-          <AnalyticsView
-            dailyLogs={dailyLogs}
-            groupWorkouts={groupWorkouts}
-            charityRecords={charityRecords}
-            onSelectDate={(d) => {
-              setSelectedDate(d);
-              setActiveView('today');
-            }}
-          />
-        )}
+              {activeView === 'report' && <WeeklyReport dailyLogs={dailyLogs} selectedDate={selectedDate} />}
 
-        {activeView === 'history' && (
-          <HistoryCalendarView
-            dailyLogs={dailyLogs}
-            onSelectDateAndSwitch={(d) => {
-              setSelectedDate(d);
-              setActiveView('today');
-            }}
-          />
-        )}
+              {activeView === 'analytics' && (
+                <AnalyticsView
+                  dailyLogs={dailyLogs}
+                  groupWorkouts={groupWorkouts}
+                  charityRecords={charityRecords}
+                  onSelectDate={(d) => {
+                    setSelectedDate(d);
+                    setActiveView('checkin');
+                  }}
+                />
+              )}
 
-        {activeView === 'admin' && isAdmin && (
-          <AdminPanel
-            onViewUserData={(userId) => {
-              setActingUserId(userId);
-              setActiveView('today');
-            }}
-          />
-        )}
+              {activeView === 'history' && (
+                <HistoryCalendarView
+                  dailyLogs={dailyLogs}
+                  onSelectDateAndSwitch={(d) => {
+                    setSelectedDate(d);
+                    setActiveView('checkin');
+                  }}
+                />
+              )}
+
+              {activeView === 'beyond' && targetUserId && <Beyond userId={targetUserId} weekKey={isoWeekKey(selectedDate)} />}
+
+              {activeView === 'profile' && <Profile />}
+            </>
+          )}
+        </section>
       </main>
 
-      <footer className="hidden md:block border-t border-slate-800 bg-slate-900 py-6 text-center text-xs text-slate-500 shadow-sm mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-2">
-          <p className="font-bold text-slate-300">Challenge 360° • Body · Mind · Heart · Soul</p>
-          <p className="text-[11px] text-slate-400">
-            Body (40) + Mind (20) + Heart (10) + Soul (10) = 80 • +5 Complete Day Bonus (85 Max/Day) • +50 Morning
-            Group Workout Bonus (once/week)
-          </p>
-        </div>
-      </footer>
-
       <RulebookModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
-
-      <GroupWorkoutModal
-        isOpen={isWorkoutModalOpen}
-        onClose={() => setIsWorkoutModalOpen(false)}
-        selectedDate={selectedDate}
-        workouts={groupWorkouts}
-        onAddWorkout={handleAddWorkout}
-        onDeleteWorkout={handleDeleteWorkout}
-        weekAlreadyHasBonus={thisWeekHasMorningWorkout}
-      />
 
       <MonthlyCharityModal
         isOpen={isCharityModalOpen}

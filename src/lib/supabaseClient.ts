@@ -19,6 +19,3 @@ export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
     autoRefreshToken: true,
   },
 });
-
-export const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
-export const isGoogleDriveConfigured = Boolean(googleClientId);

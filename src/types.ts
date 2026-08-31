@@ -17,6 +17,7 @@ export interface UserProfile {
   isActive: boolean;
   teamId: string | null;
   goalPoints: number;
+  leaderboardVisible: boolean;
   createdAt: string;
 }
 
@@ -122,10 +123,8 @@ export interface HealthReport {
   userId?: string;
   date: string; // YYYY-MM-DD
   source: HealthReportSource;
-  driveFileId: string;
-  driveFileName: string;
-  driveViewLink: string;
-  driveThumbnailLink?: string;
+  storagePath: string;
+  fileName: string;
   notes?: string;
   uploadedAt: string;
 }
@@ -171,6 +170,12 @@ export interface PillarScoreBreakdown {
   totalItemsCount: number;
 }
 
+export interface Reflection {
+  weekKey: string;
+  content: string;
+  updatedAt: string;
+}
+
 export interface WeeklyScoreBreakdown {
   weekStart: string; // YYYY-MM-DD
   weekEnd: string; // YYYY-MM-DD
@@ -202,6 +207,8 @@ export interface IndividualLeaderboardEntry {
   goalPoints: number;
   goalProgress: number; // 0-100
   disqualifiedWeeks: number; // weeks that failed the 2x strength/cardio qualifier
+  balanceScore: number; // 0-100, avg of each pillar's % of its own max
+  leaderboardVisible: boolean;
   rank: number;
 }
 

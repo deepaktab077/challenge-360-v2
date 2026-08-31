@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { deleteHealthReportFile } from '../lib/supabaseStorage';
 import {
   DailyLog,
   GroupWorkout,
@@ -10,6 +11,7 @@ import {
   TeamLeaderboardEntry,
   FeedPost,
   FeedReaction,
+  Reflection,
 } from '../types';
 import {
   calculateDailyScore,
@@ -24,6 +26,7 @@ import {
   scoreMeditation,
   MORNING_WORKOUT_BONUS_POINTS,
   STRENGTH_CARDIO_WEEKLY_MIN_SESSIONS,
+  calculateBalanceScore,
 } from '../constants/rules';
 
 // ============================================================================
@@ -63,6 +66,7 @@ function mapProfile(row: any): UserProfile {
     isActive: row.is_active,
     teamId: row.team_id,
     goalPoints: row.goal_points || 500,
+    leaderboardVisible: row.leaderboard_visible ?? true,
     createdAt: row.created_at,
   };
 }
@@ -397,7 +401,7 @@ export async function importAppDataJson(
 }
 
 // ============================================================================
-// HEALTH REPORT UPLOADS (files live in the user's own Google Drive)
+// HEALTH REPORT UPLOADS (files live in our private Supabase Storage bucket)
 // ============================================================================
 
 export async function loadHealthReports(userId: string): Promise<HealthReport[]> {
@@ -420,19 +424,19 @@ export async function addHealthReport(
     user_id: userId,
     date: report.date,
     source: report.source,
-    drive_file_id: report.driveFileId,
-    drive_file_name: report.driveFileName,
-    drive_view_link: report.driveViewLink,
-    drive_thumbnail_link: report.driveThumbnailLink || '',
+    storage_path: report.storagePath,
+    file_name: report.fileName,
     notes: report.notes || '',
     uploaded_at: new Date().toISOString(),
   };
-  await supabase.from('health_reports').insert(payload);
+  const { error } = await supabase.from('health_reports').insert(payload);
+  if (error) throw new Error(`Couldn't save the upload record: ${error.message}`);
   return rowToHealthReport(payload);
 }
 
-export async function deleteHealthReport(userId: string, id: string): Promise<void> {
+export async function deleteHealthReport(userId: string, id: string, storagePath: string): Promise<void> {
   await supabase.from('health_reports').delete().eq('id', id).eq('user_id', userId);
+  await deleteHealthReportFile(storagePath);
 }
 
 function rowToHealthReport(row: any): HealthReport {
@@ -441,10 +445,8 @@ function rowToHealthReport(row: any): HealthReport {
     userId: row.user_id,
     date: row.date,
     source: row.source,
-    driveFileId: row.drive_file_id,
-    driveFileName: row.drive_file_name,
-    driveViewLink: row.drive_view_link,
-    driveThumbnailLink: row.drive_thumbnail_link,
+    storagePath: row.storage_path,
+    fileName: row.file_name,
     notes: row.notes,
     uploadedAt: row.uploaded_at,
   };
@@ -611,6 +613,8 @@ export async function fetchIndividualLeaderboard(
         goalPoints,
         goalProgress: goalPoints > 0 ? Math.min(100, Math.round((totalScore / goalPoints) * 100)) : 0,
         disqualifiedWeeks,
+        balanceScore: calculateBalanceScore(bodyScore, mindScore, heartScore, soulScore),
+        leaderboardVisible: p.leaderboard_visible ?? true,
         rank: 0,
       };
     })
@@ -795,4 +799,34 @@ export async function fetchCollectiveGoalProgress(): Promise<{ totalScore: numbe
   const totalScore = entries.reduce((sum, e) => sum + e.totalScore, 0);
   const totalGoal = entries.reduce((sum, e) => sum + e.goalPoints, 0);
   return { totalScore, totalGoal };
+}
+
+// ============================================================================
+// PROFILE PRIVACY
+// ============================================================================
+
+export async function updateLeaderboardVisibility(userId: string, visible: boolean): Promise<void> {
+  await supabase.from('profiles').update({ leaderboard_visible: visible }).eq('id', userId);
+}
+
+// ============================================================================
+// "BEYOND" — private weekly reflection journal
+// ============================================================================
+
+export async function loadReflection(userId: string, weekKey: string): Promise<Reflection | null> {
+  const { data, error } = await supabase
+    .from('reflections')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('week_key', weekKey)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { weekKey: data.week_key, content: data.content, updatedAt: data.updated_at };
+}
+
+export async function saveReflection(userId: string, weekKey: string, content: string): Promise<void> {
+  await supabase.from('reflections').upsert(
+    { user_id: userId, week_key: weekKey, content, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,week_key' }
+  );
 }

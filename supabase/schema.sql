@@ -123,20 +123,28 @@ create table if not exists public.charity_records (
 );
 
 -- 6. HEALTH REPORT UPLOADS ------------------------------------------------------
--- The actual image files live in the USER'S OWN Google Drive (not our storage).
--- We only keep a pointer (file id + view link) so the app can list/link to them.
+-- The actual image files live in OUR Supabase Storage bucket "health-reports",
+-- in a private per-user folder (health-reports/{user_id}/...). This table is
+-- just a pointer + metadata row.
 create table if not exists public.health_reports (
   id text primary key,
   user_id uuid not null references public.profiles (id) on delete cascade,
   date date not null,
   source text not null default 'other', -- e.g. 'fitbit','apple_health','google_fit','garmin','other'
-  drive_file_id text not null,
-  drive_file_name text not null default '',
-  drive_view_link text not null default '',
-  drive_thumbnail_link text default '',
+  storage_path text not null, -- path inside the health-reports bucket
+  file_name text not null default '',
   notes text default '',
   uploaded_at timestamptz not null default now()
 );
+
+alter table public.health_reports add column if not exists storage_path text;
+alter table public.health_reports add column if not exists file_name text not null default '';
+-- Older installs may still have the retired Google Drive columns; harmless to
+-- leave them, but drop them if you want a clean table:
+-- alter table public.health_reports drop column if exists drive_file_id;
+-- alter table public.health_reports drop column if exists drive_file_name;
+-- alter table public.health_reports drop column if exists drive_view_link;
+-- alter table public.health_reports drop column if exists drive_thumbnail_link;
 
 -- 7. FEED (community activity feed + reactions) ---------------------------------
 -- One post per user per day, written by the app right after a daily log is
@@ -358,6 +366,66 @@ as $$
 $$;
 
 grant execute on function public.get_leaderboard_charity_status() to authenticated;
+
+-- ============================================================================
+-- SUPABASE STORAGE — health report screenshots
+-- ============================================================================
+-- Creates a private bucket "health-reports". Files are stored under
+-- {user_id}/{filename} so ownership can be checked from the path itself.
+insert into storage.buckets (id, name, public)
+values ('health-reports', 'health-reports', false)
+on conflict (id) do nothing;
+
+drop policy if exists "health_reports_storage_select" on storage.objects;
+create policy "health_reports_storage_select" on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'health-reports'
+    and (auth.uid()::text = (storage.foldername(name))[1] or public.is_admin())
+  );
+
+drop policy if exists "health_reports_storage_insert" on storage.objects;
+create policy "health_reports_storage_insert" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'health-reports'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "health_reports_storage_delete" on storage.objects;
+create policy "health_reports_storage_delete" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'health-reports'
+    and (auth.uid()::text = (storage.foldername(name))[1] or public.is_admin())
+  );
+
+-- ============================================================================
+-- PROFILE PRIVACY + "BEYOND" REFLECTION JOURNAL
+-- ============================================================================
+alter table public.profiles add column if not exists leaderboard_visible boolean not null default true;
+
+create table if not exists public.reflections (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  week_key text not null, -- e.g. '2026-W36'
+  content text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (user_id, week_key)
+);
+
+alter table public.reflections enable row level security;
+
+drop policy if exists "reflections_select_own_or_admin" on public.reflections;
+create policy "reflections_select_own_or_admin" on public.reflections
+  for select using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists "reflections_insert_own" on public.reflections;
+create policy "reflections_insert_own" on public.reflections
+  for insert with check (user_id = auth.uid());
+
+drop policy if exists "reflections_update_own" on public.reflections;
+create policy "reflections_update_own" on public.reflections
+  for update using (user_id = auth.uid());
 
 -- ============================================================================
 -- SEED SOME STARTER TEAMS (edit / delete these, or add your own from Admin)
