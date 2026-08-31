@@ -1,6 +1,107 @@
 import { DailyLog, PillarScoreBreakdown } from '../types';
 
 // ============================================================================
+// SCORING CONFIGURATION — admin-editable thresholds
+// ============================================================================
+// Every scoring function below reads from `currentThresholds`, which starts
+// out equal to these defaults and can be replaced at runtime (via
+// setScoringThresholds) once the admin's saved config loads from the
+// database. If that never happens — table empty, not yet configured, or the
+// fetch fails — everything keeps working exactly as before, using defaults.
+
+export interface ScoringThresholds {
+  movementFullSteps: number;
+  movementFullPts: number;
+  movementPartialSteps: number;
+  movementPartialPts: number;
+  nutritionDietPts: number;
+  nutritionNoCheatPts: number;
+  hydrationFullLiters: number;
+  hydrationFullPts: number;
+  hydrationPartialLiters: number;
+  hydrationPartialPts: number;
+  sleepDurationFullHours: number;
+  sleepDurationFullPts: number;
+  sleepDurationMidHours: number;
+  sleepDurationMidPts: number;
+  sleepDurationPartialHours: number;
+  sleepDurationPartialPts: number;
+  sleepDisciplineFullPts: number;
+  sleepDisciplineTier2Pts: number;
+  sleepDisciplineTier2MaxMin: number;
+  sleepDisciplineTier3Pts: number;
+  sleepDisciplineTier3MaxMin: number;
+  learningMinMinutes: number;
+  learningPts: number;
+  screenFullMaxHours: number;
+  screenFullPts: number;
+  screenPartialMaxHours: number;
+  screenPartialPts: number;
+  familyMinMinutes: number;
+  familyPts: number;
+  meditationFullMinutes: number;
+  meditationFullPts: number;
+  meditationPartialMinutes: number;
+  meditationPartialPts: number;
+  completeDayBonusPts: number;
+  morningWorkoutBonusPts: number;
+  strengthCardioWeeklyMinSessions: number;
+}
+
+export const DEFAULT_SCORING_THRESHOLDS: ScoringThresholds = {
+  movementFullSteps: 10000,
+  movementFullPts: 10,
+  movementPartialSteps: 8000,
+  movementPartialPts: 5,
+  nutritionDietPts: 5,
+  nutritionNoCheatPts: 5,
+  hydrationFullLiters: 4,
+  hydrationFullPts: 7,
+  hydrationPartialLiters: 3,
+  hydrationPartialPts: 4,
+  sleepDurationFullHours: 7.5,
+  sleepDurationFullPts: 7,
+  sleepDurationMidHours: 7.0,
+  sleepDurationMidPts: 5,
+  sleepDurationPartialHours: 6.5,
+  sleepDurationPartialPts: 2,
+  sleepDisciplineFullPts: 6,
+  sleepDisciplineTier2Pts: 4,
+  sleepDisciplineTier2MaxMin: 15,
+  sleepDisciplineTier3Pts: 2,
+  sleepDisciplineTier3MaxMin: 30,
+  learningMinMinutes: 45,
+  learningPts: 10,
+  screenFullMaxHours: 2,
+  screenFullPts: 10,
+  screenPartialMaxHours: 3,
+  screenPartialPts: 5,
+  familyMinMinutes: 30,
+  familyPts: 10,
+  meditationFullMinutes: 45,
+  meditationFullPts: 10,
+  meditationPartialMinutes: 30,
+  meditationPartialPts: 5,
+  completeDayBonusPts: 5,
+  morningWorkoutBonusPts: 50,
+  strengthCardioWeeklyMinSessions: 2,
+};
+
+let currentThresholds: ScoringThresholds = { ...DEFAULT_SCORING_THRESHOLDS };
+
+/** Called once at app startup (after loading the admin's saved config from
+ * Supabase) and again whenever an admin saves changes on the Score Cards
+ * page. Every scoring calculation anywhere in the app reads from this same
+ * shared value, so a save takes effect immediately, everywhere. */
+export function setScoringThresholds(thresholds: Partial<ScoringThresholds>): void {
+  currentThresholds = { ...DEFAULT_SCORING_THRESHOLDS, ...thresholds };
+}
+
+export function getScoringThresholds(): ScoringThresholds {
+  return currentThresholds;
+}
+
+// ============================================================================
 // 360° SEPTEMBER CHALLENGE — POINT SYSTEM
 // ============================================================================
 
@@ -157,38 +258,45 @@ export const STRENGTH_CARDIO_WEEKLY_MIN_SESSIONS = 2;
 export const STRENGTH_CARDIO_MIN_MINUTES = 45;
 
 // ----------------------------------------------------------------------------
-// Per-item scoring functions
+// Per-item scoring functions — all read live thresholds from
+// getScoringThresholds(), so an admin's saved Score Card changes apply
+// immediately without needing to touch this file.
 // ----------------------------------------------------------------------------
 
 export function scoreMovement(steps: number): number {
-  if (steps >= 10000) return 10;
-  if (steps >= 8000) return 5;
+  const t = currentThresholds;
+  if (steps >= t.movementFullSteps) return t.movementFullPts;
+  if (steps >= t.movementPartialSteps) return t.movementPartialPts;
   return 0;
 }
 
 export function scoreNutrition(dietFollowed: boolean, noCheatDay: boolean): number {
+  const t = currentThresholds;
   let pts = 0;
-  if (dietFollowed) pts += 5;
-  if (noCheatDay) pts += 5;
-  return Math.min(pts, 10);
+  if (dietFollowed) pts += t.nutritionDietPts;
+  if (noCheatDay) pts += t.nutritionNoCheatPts;
+  return Math.min(pts, t.nutritionDietPts + t.nutritionNoCheatPts);
 }
 
 export function scoreHydration(liters: number): number {
-  if (liters >= 4) return 7;
-  if (liters >= 3) return 4;
+  const t = currentThresholds;
+  if (liters >= t.hydrationFullLiters) return t.hydrationFullPts;
+  if (liters >= t.hydrationPartialLiters) return t.hydrationPartialPts;
   return 0;
 }
 
 export function scoreSleepDuration(hours: number): number {
-  if (hours >= 7.5) return 7;
-  if (hours >= 7.0) return 5;
-  if (hours >= 6.5) return 2;
+  const t = currentThresholds;
+  if (hours >= t.sleepDurationFullHours) return t.sleepDurationFullPts;
+  if (hours >= t.sleepDurationMidHours) return t.sleepDurationMidPts;
+  if (hours >= t.sleepDurationPartialHours) return t.sleepDurationPartialPts;
   return 0;
 }
 
 /** bedTime is 24h "HH:MM". Anything from noon onward through midnight counts as
  * "PM"; after-midnight times (00:00–04:59) are treated as very late (0 pts). */
 export function scoreSleepDiscipline(bedTime?: string): number {
+  const t = currentThresholds;
   if (!bedTime) return 0;
   const [hRaw, mRaw] = bedTime.split(':').map(Number);
   if (Number.isNaN(hRaw) || Number.isNaN(mRaw)) return 0;
@@ -205,29 +313,33 @@ export function scoreSleepDiscipline(bedTime?: string): number {
     minutesFrom10pm = -1;
   }
 
-  if (minutesFrom10pm <= 0) return 6;
-  if (minutesFrom10pm <= 15) return 4;
-  if (minutesFrom10pm <= 30) return 2;
+  if (minutesFrom10pm <= 0) return t.sleepDisciplineFullPts;
+  if (minutesFrom10pm <= t.sleepDisciplineTier2MaxMin) return t.sleepDisciplineTier2Pts;
+  if (minutesFrom10pm <= t.sleepDisciplineTier3MaxMin) return t.sleepDisciplineTier3Pts;
   return 0;
 }
 
 export function scoreLearning(minutes: number): number {
-  return minutes >= 45 ? 10 : 0;
+  const t = currentThresholds;
+  return minutes >= t.learningMinMinutes ? t.learningPts : 0;
 }
 
 export function scoreScreenDiscipline(hours: number): number {
-  if (hours < 2) return 10;
-  if (hours <= 3) return 5;
+  const t = currentThresholds;
+  if (hours < t.screenFullMaxHours) return t.screenFullPts;
+  if (hours <= t.screenPartialMaxHours) return t.screenPartialPts;
   return 0;
 }
 
 export function scoreFamilyConnection(minutes: number): number {
-  return minutes >= 30 ? 10 : 0;
+  const t = currentThresholds;
+  return minutes >= t.familyMinMinutes ? t.familyPts : 0;
 }
 
 export function scoreMeditation(minutes: number): number {
-  if (minutes >= 45) return 10;
-  if (minutes >= 30) return 5;
+  const t = currentThresholds;
+  if (minutes >= t.meditationFullMinutes) return t.meditationFullPts;
+  if (minutes >= t.meditationPartialMinutes) return t.meditationPartialPts;
   return 0;
 }
 

@@ -11,6 +11,7 @@ import {
   TeamLeaderboardEntry,
   FeedPost,
   FeedReaction,
+  FeedComment,
   Reflection,
 } from '../types';
 import {
@@ -27,6 +28,7 @@ import {
   MORNING_WORKOUT_BONUS_POINTS,
   STRENGTH_CARDIO_WEEKLY_MIN_SESSIONS,
   calculateBalanceScore,
+  ScoringThresholds,
 } from '../constants/rules';
 
 // ============================================================================
@@ -120,7 +122,7 @@ export async function loadAllDailyLogs(userId: string): Promise<Record<string, D
   return logs;
 }
 
-export async function saveDailyLog(userId: string, log: DailyLog, fullName?: string): Promise<void> {
+export async function saveDailyLog(userId: string, log: DailyLog): Promise<void> {
   const score = calculateDailyScore(log);
   const payload = {
     user_id: userId,
@@ -142,9 +144,13 @@ export async function saveDailyLog(userId: string, log: DailyLog, fullName?: str
   if (error) {
     throw new Error(`Couldn't save today's log: ${error.message}`);
   }
-  if (fullName) {
-    await upsertFeedPostForLog(userId, fullName, log);
-  }
+}
+
+/** Explicitly shares today's progress to the Community feed. Only score
+ * totals and pillar-completion are shared — never raw habit detail. Called
+ * only when the user hits "Save & Share", not on every field edit. */
+export async function shareLogToCommunity(userId: string, fullName: string, log: DailyLog): Promise<void> {
+  await upsertFeedPostForLog(userId, fullName, log);
 }
 
 function rowToDailyLog(row: any): DailyLog {
@@ -718,11 +724,12 @@ export async function upsertFeedPostForLog(userId: string, fullName: string, log
 }
 
 export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
-  const [{ data: posts }, { data: profiles }, { data: teams }, { data: reactions }] = await Promise.all([
+  const [{ data: posts }, { data: profiles }, { data: teams }, { data: reactions }, { data: comments }] = await Promise.all([
     supabase.from('feed_posts').select('*').order('created_at', { ascending: false }).limit(limit),
     supabase.from('profiles').select('id,full_name,team_id'),
     supabase.from('teams').select('id,name'),
     supabase.from('feed_reactions').select('*'),
+    supabase.from('feed_comments').select('*').order('created_at', { ascending: true }),
   ]);
 
   const nameById = new Map<string, string>((profiles || []).map((p: any) => [p.id, p.full_name]));
@@ -733,6 +740,19 @@ export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
     const list = reactionsByPost.get(r.post_id) || [];
     list.push({ id: r.id, postId: r.post_id, userId: r.user_id, emoji: r.emoji, createdAt: r.created_at });
     reactionsByPost.set(r.post_id, list);
+  }
+  const commentsByPost = new Map<string, FeedComment[]>();
+  for (const c of comments || []) {
+    const list = commentsByPost.get(c.post_id) || [];
+    list.push({
+      id: c.id,
+      postId: c.post_id,
+      userId: c.user_id,
+      fullName: nameById.get(c.user_id) || 'Someone',
+      content: c.content,
+      createdAt: c.created_at,
+    });
+    commentsByPost.set(c.post_id, list);
   }
 
   return (posts || []).map((row: any) => {
@@ -749,8 +769,18 @@ export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
       message: row.message,
       createdAt: row.created_at,
       reactions: reactionsByPost.get(row.id) || [],
+      comments: commentsByPost.get(row.id) || [],
     };
   });
+}
+
+export async function addFeedComment(postId: string, userId: string, content: string): Promise<void> {
+  const id = 'fc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  await supabase.from('feed_comments').insert({ id, post_id: postId, user_id: userId, content: content.trim() });
+}
+
+export async function deleteFeedComment(commentId: string, userId: string): Promise<void> {
+  await supabase.from('feed_comments').delete().eq('id', commentId).eq('user_id', userId);
 }
 
 export async function toggleFeedReaction(postId: string, userId: string, emoji: string, isActive: boolean): Promise<void> {
@@ -789,6 +819,7 @@ export async function fetchLatestFeedPostForUser(userId: string): Promise<FeedPo
     message: row.message,
     createdAt: row.created_at,
     reactions: postReactions,
+    comments: [],
   };
 }
 
@@ -829,4 +860,83 @@ export async function saveReflection(userId: string, weekKey: string, content: s
     { user_id: userId, week_key: weekKey, content, updated_at: new Date().toISOString() },
     { onConflict: 'user_id,week_key' }
   );
+}
+
+// ============================================================================
+// SCORING CONFIGURATION (Admin Score Cards)
+// ============================================================================
+
+/** Loads the admin's saved thresholds, if any. Returns null if the config
+ * table is empty (not yet configured) — callers should keep using the
+ * built-in defaults in that case. */
+export async function fetchScoringConfig(): Promise<Partial<ScoringThresholds> | null> {
+  const { data, error } = await supabase.from('scoring_config').select('*').eq('id', 'default').maybeSingle();
+  if (error || !data) return null;
+  return data.config as Partial<ScoringThresholds>;
+}
+
+export async function saveScoringConfig(thresholds: ScoringThresholds, adminUserId: string): Promise<void> {
+  const { error } = await supabase.from('scoring_config').upsert(
+    { id: 'default', config: thresholds, updated_at: new Date().toISOString(), updated_by: adminUserId },
+    { onConflict: 'id' }
+  );
+  if (error) throw new Error(`Couldn't save scoring config: ${error.message}`);
+}
+
+// ============================================================================
+// ADMIN DASHBOARD EXPORT
+// ============================================================================
+
+/** Builds a CSV of the current leaderboard/dashboard data for admin export.
+ * Reuses the same IndividualLeaderboardEntry data already shown on screen —
+ * no separate calculation path. */
+export function buildAdminDashboardCsv(entries: IndividualLeaderboardEntry[], periodLabel: string): string {
+  const headers = [
+    'Participant Name',
+    'Period',
+    'Rank',
+    'Overall Score',
+    'Body Score (/40)',
+    'Mind Score (/20)',
+    'Heart Score (/10)',
+    'Soul Score (/10)',
+    'Balance Score (%)',
+    'Goal Points',
+    'Goal Progress (%)',
+    'Days Logged',
+    'Complete Days',
+    'Morning Workout Weeks',
+    'Charity Qualified',
+    'Disqualified Weeks',
+  ];
+
+  const escapeCsv = (v: string | number | boolean) => {
+    const s = String(v).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows = entries.map((e) =>
+    [
+      e.fullName,
+      periodLabel,
+      e.rank,
+      e.totalScore,
+      e.bodyScore,
+      e.mindScore,
+      e.heartScore,
+      e.soulScore,
+      e.balanceScore,
+      e.goalPoints,
+      e.goalProgress,
+      e.daysLogged,
+      e.perfectDays,
+      e.morningWorkoutWeeks,
+      e.charityQualified ? 'YES' : 'NO',
+      e.disqualifiedWeeks,
+    ]
+      .map(escapeCsv)
+      .join(',')
+  );
+
+  return [headers.join(','), ...rows].join('\n');
 }

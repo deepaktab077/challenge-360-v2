@@ -139,6 +139,15 @@ export interface FeedReaction {
   createdAt: string;
 }
 
+export interface FeedComment {
+  id: string;
+  postId: string;
+  userId: string;
+  fullName?: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface FeedPost {
   id: string;
   userId: string;
@@ -151,6 +160,7 @@ export interface FeedPost {
   message: string;
   createdAt: string;
   reactions: FeedReaction[];
+  comments: FeedComment[];
 }
 
 export interface PillarScoreBreakdown {

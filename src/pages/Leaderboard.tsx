@@ -74,9 +74,6 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
     reload(period).then(() => {
       if (cancelled) return;
     });
-    // Keep standings live for a community challenge — refresh automatically
-    // every 45s, plus whenever the tab regains focus (e.g. coming back after
-    // logging a day), on top of the manual refresh button.
     const interval = setInterval(() => reload(period), 45000);
     const onFocus = () => reload(period);
     window.addEventListener('focus', onFocus);
@@ -114,92 +111,64 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
   const podiumEntries = [sortedByCategory[1], sortedByCategory[0], sortedByCategory[2]].filter(
     Boolean
   ) as IndividualLeaderboardEntry[];
-  const podiumHeights = ['h-20', 'h-28', 'h-16'];
-  const podiumMedalColors = ['bg-slate-300', 'bg-amber-400', 'bg-orange-400'];
+  const podiumHeights = [72, 100, 58];
   const podiumRankOrder = [2, 1, 3];
+  const podiumColors = ['linear-gradient(var(--muted),var(--ink))', 'linear-gradient(var(--gold),#c99a5f)', 'linear-gradient(#b5734a,#8a5636)'];
 
   return (
-    <div className="animate-fadeIn space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <Trophy className="w-6 h-6 text-amber-400" />
-          Leaderboard
-        </h1>
-        <div className="flex items-center justify-between gap-2 mt-1">
-          <p className="text-sm text-slate-400">Live standings — everyone can see everyone's progress.</p>
-          <button
-            onClick={() => reload(period)}
-            disabled={loading}
-            className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-emerald-400 transition-colors flex-shrink-0"
-            title="Refresh now"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {lastUpdated
-              ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-              : 'Refresh'}
-          </button>
-        </div>
+    <div className="animate-fadeIn" style={{ display: 'grid', gap: 16 }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="sub" style={{ margin: 0 }}>Live standings — everyone can see everyone's progress.</p>
+        <button
+          onClick={() => reload(period)}
+          disabled={loading}
+          className="btn-secondary"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 10px' }}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Refresh'}
+        </button>
       </div>
 
-      {/* Collective goal */}
-      <div className="bg-gradient-to-r from-indigo-600/15 to-purple-600/15 border border-indigo-500/20 rounded-2xl p-4">
-        <div className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
-          <span className="flex items-center gap-1.5">
-            <Target className="w-3.5 h-3.5 text-indigo-400" /> Collective Challenge Goal
+      <div className="card">
+        <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+          <span className="ey" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Target className="w-3.5 h-3.5" /> COLLECTIVE CHALLENGE GOAL
           </span>
-          <span className="text-indigo-300">{collective.pct}% Reached</span>
+          <b style={{ color: 'var(--ink)', fontSize: 13 }}>{collective.pct}% Reached</b>
         </div>
-        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-400 rounded-full"
-            style={{ width: `${collective.pct}%` }}
-          />
+        <div className="bar">
+          <i style={{ width: `${collective.pct}%`, background: 'var(--gold)' }} />
         </div>
-        <p className="text-[11px] text-slate-500 mt-1.5">
+        <p className="sub" style={{ marginTop: 8 }}>
           {collective.totalScore.toLocaleString()} of {collective.totalGoal.toLocaleString()} total points across everyone
         </p>
       </div>
 
-      {/* Period selector */}
-      <div className="flex items-center bg-slate-900/60 border border-slate-800 rounded-xl p-1 w-fit">
+      <div className="choices" style={{ margin: 0 }}>
         {PERIODS.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setPeriod(p.id)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-              period === p.id ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
+          <button key={p.id} onClick={() => setPeriod(p.id)} className={`choice ${period === p.id ? 'on' : ''}`}>
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* Category selector */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="choices" style={{ margin: 0 }}>
         {CATEGORIES.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            onClick={() => setCategory(id)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap border transition-colors ${
-              category === id
-                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
+          <button key={id} onClick={() => setCategory(id)} className={`choice ${category === id ? 'on' : ''}`}>
+            <Icon className="w-3.5 h-3.5 inline mr-1" style={{ verticalAlign: -2 }} />
             {label}
           </button>
         ))}
       </div>
 
       {myEntry && category !== 'team' && (
-        <div className="bg-gradient-to-r from-emerald-600/20 to-indigo-600/20 border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <p className="font-bold text-sm text-slate-100">
+            <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', margin: 0 }}>
               You: #{sortedByCategory.findIndex((e) => e.userId === myEntry.userId) + 1} · {myEntry.totalScore} pts
             </p>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5 sub" style={{ marginTop: 2 }}>
               {editingGoal ? (
                 <>
                   <span>Goal</span>
@@ -211,9 +180,10 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
                     value={goalInput}
                     onChange={(e) => setGoalInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveGoal()}
-                    className="w-16 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-100 text-xs"
+                    className="field-input"
+                    style={{ width: 70, padding: '3px 6px', fontSize: 12 }}
                   />
-                  <button onClick={handleSaveGoal} className="text-emerald-400 hover:text-emerald-300">
+                  <button onClick={handleSaveGoal} style={{ background: 'none', border: 'none', color: 'var(--body)', cursor: 'pointer' }}>
                     <Check className="w-3.5 h-3.5" />
                   </button>
                 </>
@@ -227,130 +197,131 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
                       setGoalInput(String(myEntry.goalPoints));
                       setEditingGoal(true);
                     }}
-                    className="text-slate-500 hover:text-slate-300"
+                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}
                   >
                     <Pencil className="w-3 h-3" />
                   </button>
                 </>
               )}
             </div>
-            <div className="w-40 h-1.5 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
-              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${myEntry.goalProgress}%` }} />
+            <div className="bar" style={{ width: 160, marginTop: 6 }}>
+              <i style={{ width: `${myEntry.goalProgress}%`, background: 'var(--body)' }} />
             </div>
           </div>
-          {myEntry.disqualifiedWeeks > 0 && (
-            <span className="text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-1.5 rounded-full flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" /> {myEntry.disqualifiedWeeks} week
-              {myEntry.disqualifiedWeeks > 1 ? 's' : ''} didn't qualify
-            </span>
-          )}
-          {myEntry.charityQualified && (
-            <span className="text-xs font-bold bg-pink-500/10 text-pink-400 border border-pink-500/20 px-2.5 py-1.5 rounded-full flex items-center gap-1">
-              <Gift className="w-3.5 h-3.5" /> Charity Qualified
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {myEntry.disqualifiedWeeks > 0 && (
+              <span className="tag" style={{ color: 'var(--danger)' }}>
+                <AlertTriangle className="w-3.5 h-3.5 inline mr-1" /> {myEntry.disqualifiedWeeks} week
+                {myEntry.disqualifiedWeeks > 1 ? 's' : ''} didn't qualify
+              </span>
+            )}
+            {myEntry.charityQualified && (
+              <span className="tag">
+                <Gift className="w-3.5 h-3.5 inline mr-1" /> Charity Qualified
+              </span>
+            )}
+          </div>
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-slate-500 text-sm gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading leaderboard…
+        <div className="sub" style={{ textAlign: 'center', padding: '48px 0' }}>
+          <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading leaderboard…
         </div>
       ) : category === 'team' ? (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="card" style={{ padding: 0 }}>
           {teams.map((t) => (
             <div
               key={t.teamId}
-              className={`flex items-center justify-between px-4 py-3.5 border-b border-slate-800 last:border-b-0 ${
-                t.teamId === profile?.teamId ? 'bg-emerald-500/5' : ''
-              }`}
+              className="list-row"
+              style={{ padding: '13px 16px', background: t.teamId === profile?.teamId ? 'var(--chip)' : 'transparent' }}
             >
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center text-sm font-black">
-                  {t.rank}
-                </span>
-                <div>
-                  <p className="font-bold text-sm text-slate-100">{t.teamName}</p>
-                  <p className="text-xs text-slate-500">
-                    {t.memberCount} members · avg {t.averageScorePerMember} pts
-                  </p>
-                </div>
+              <div className="avatar">{t.rank}</div>
+              <div className="grow">
+                <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--ink)', margin: 0 }}>{t.teamName}</p>
+                <p className="sub" style={{ margin: 0 }}>
+                  {t.memberCount} members · avg {t.averageScorePerMember} pts
+                </p>
               </div>
-              <span className="font-black text-amber-400">{t.totalScore} pts</span>
+              <b style={{ color: 'var(--gold)' }}>{t.totalScore} pts</b>
             </div>
           ))}
-          {teams.length === 0 && (
-            <div className="text-center py-10 text-sm text-slate-500">No teams with active members yet.</div>
-          )}
+          {teams.length === 0 && <div className="sub" style={{ textAlign: 'center', padding: 28 }}>No teams with active members yet.</div>}
         </div>
       ) : (
         <>
           {podiumEntries.length > 0 && (
-            <div className="flex items-end justify-center gap-3 px-2 pt-4 pb-2">
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 12, padding: '8px 0' }}>
               {podiumEntries.map((entry, i) => (
                 <button
                   key={entry.userId}
                   onClick={() => setSelectedEntry(entry)}
-                  className="flex flex-col items-center flex-1 max-w-[110px]"
+                  style={{ background: 'none', border: 0, cursor: 'pointer', flex: 1, maxWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                 >
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm mb-1.5 relative">
+                  <div className="avatar" style={{ width: 46, height: 46, fontSize: 14, position: 'relative' }}>
                     {entry.fullName[0]?.toUpperCase()}
-                    <span
-                      className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full ${podiumMedalColors[i]} text-slate-900 text-[10px] font-black flex items-center justify-center border-2 border-slate-950`}
-                    >
-                      {podiumRankOrder[i]}
-                    </span>
                   </div>
-                  <p className="text-xs font-bold text-slate-200 text-center truncate w-full">{entry.fullName}</p>
-                  <p className="text-[11px] font-black text-amber-400">{scoreFor(entry, category)} pts</p>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)', textAlign: 'center', margin: '6px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                    {entry.fullName}
+                  </p>
+                  <p style={{ fontSize: 11, fontWeight: 900, color: 'var(--gold)', margin: 0 }}>{scoreFor(entry, category)} pts</p>
                   <div
-                    className={`w-full ${podiumHeights[i]} rounded-t-xl mt-2 bg-gradient-to-t flex items-start justify-center pt-2 ${
-                      podiumRankOrder[i] === 1
-                        ? 'from-amber-600 to-amber-400'
-                        : podiumRankOrder[i] === 2
-                        ? 'from-slate-600 to-slate-400'
-                        : 'from-orange-700 to-orange-500'
-                    }`}
+                    style={{
+                      width: '100%',
+                      height: podiumHeights[i],
+                      borderRadius: '14px 14px 0 0',
+                      marginTop: 8,
+                      background: podiumColors[i],
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'center',
+                      paddingTop: 8,
+                    }}
                   >
-                    <span className="text-white font-black text-lg drop-shadow">#{podiumRankOrder[i]}</span>
+                    <span style={{ color: '#fff', fontWeight: 900, fontSize: 18 }}>#{podiumRankOrder[i]}</span>
                   </div>
                 </button>
               ))}
             </div>
           )}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+          <div className="card" style={{ padding: 0 }}>
             {sortedByCategory.map((e, i) => (
               <button
                 key={e.userId}
                 onClick={() => setSelectedEntry(e)}
-                className={`w-full flex items-center justify-between px-4 py-3.5 border-b border-slate-800 last:border-b-0 text-left hover:bg-slate-800/40 transition-colors ${
-                  e.userId === profile?.id ? 'bg-emerald-500/5' : ''
-                }`}
+                className="list-row"
+                style={{
+                  width: '100%',
+                  padding: '13px 16px',
+                  background: e.userId === profile?.id ? 'var(--chip)' : 'transparent',
+                  border: 0,
+                  borderTop: '1px solid var(--line)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="w-8 h-8 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-black flex-shrink-0">
-                    #{i + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm text-slate-100 truncate">{e.fullName}</p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {TEAMS_ENABLED ? `${e.teamName || 'No team'} · ` : ''}Goal {e.goalProgress}%
-                    </p>
-                  </div>
+                <span className="avatar" style={{ fontSize: 11 }}>#{i + 1}</span>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--ink)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {e.fullName}
+                  </p>
+                  <p className="sub" style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {TEAMS_ENABLED ? `${e.teamName || 'No team'} · ` : ''}Goal {e.goalProgress}%
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {e.disqualifiedWeeks > 0 && <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />}
+                  {e.disqualifiedWeeks > 0 && <AlertTriangle className="w-3.5 h-3.5" style={{ color: 'var(--danger)' }} />}
                   {e.perfectDays > 0 && (
-                    <span className="hidden sm:flex items-center gap-0.5 text-xs text-amber-400">
-                      <Flame className="w-3.5 h-3.5" /> {e.perfectDays}
+                    <span className="sub" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Flame className="w-3.5 h-3.5" style={{ color: 'var(--gold)' }} /> {e.perfectDays}
                     </span>
                   )}
-                  <span className="font-black text-amber-400 text-sm">{scoreFor(e, category)} pts</span>
+                  <b style={{ color: 'var(--gold)', fontSize: 13 }}>{scoreFor(e, category)} pts</b>
                 </div>
               </button>
             ))}
             {sortedByCategory.length === 0 && (
-              <div className="text-center py-10 text-sm text-slate-500">No scores logged yet.</div>
+              <div className="sub" style={{ textAlign: 'center', padding: 28 }}>No scores logged yet.</div>
             )}
           </div>
         </>

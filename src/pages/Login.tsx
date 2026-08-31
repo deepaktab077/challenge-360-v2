@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, Mail, LogIn, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabaseClient';
@@ -15,6 +15,14 @@ export function Login({ onSwitchToSignup }: LoginProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [resetSending, setResetSending] = useState(false);
+  const [resetCooldown, setResetCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const t = setInterval(() => setResetCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resetCooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,11 +38,28 @@ export function Login({ onSwitchToSignup }: LoginProps) {
       setError('Enter your email above first, then tap "Forgot password".');
       return;
     }
+    if (resetSending || resetCooldown > 0) return; // avoid duplicate/rapid-fire requests
+
     setError(null);
-    await supabase.auth.resetPasswordForEmail(email.trim(), {
+    setResetSending(true);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: window.location.origin,
     });
+    setResetSending(false);
+
+    if (resetError) {
+      if (/rate limit/i.test(resetError.message)) {
+        setError(
+          "Too many email requests too quickly — Supabase's free email service limits how many can go out per hour. Please wait before trying again."
+        );
+        setResetCooldown(60);
+      } else {
+        setError(resetError.message);
+      }
+      return;
+    }
     setResetSent(true);
+    setResetCooldown(60);
   };
 
   return (

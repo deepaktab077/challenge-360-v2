@@ -5,6 +5,7 @@ import { useAuth } from './contexts/AuthContext';
 import {
   loadAllDailyLogs,
   saveDailyLog,
+  shareLogToCommunity,
   loadAllGroupWorkouts,
   addGroupWorkout,
   deleteGroupWorkout,
@@ -15,10 +16,11 @@ import {
   deleteHealthReport,
   fetchAllTeams,
   fetchIndividualLeaderboard,
+  fetchScoringConfig,
 } from './services/dataService';
 import { DailyLog, GroupWorkout, MonthlyCharityRecord, HealthReport, Team } from './types';
 import { getTodayDateStr, getMonthKey, getWeekRange, addDays } from './utils/dateUtils';
-import { calculateDailyScore, createEmptyDailyLog } from './constants/rules';
+import { calculateDailyScore, createEmptyDailyLog, setScoringThresholds } from './constants/rules';
 
 import { Sidebar, MenuButton, ActiveView, AdminView } from './components/Sidebar';
 import { DateNavigator } from './components/DateNavigator';
@@ -30,12 +32,14 @@ import { MonthlyCharityModal } from './components/MonthlyCharityModal';
 import { RulebookModal } from './components/RulebookModal';
 import { ExportImportModal } from './components/ExportImportModal';
 import { CompleteProfileModal } from './components/CompleteProfileModal';
+import { Toast } from './components/Toast';
 import { TEAMS_ENABLED } from './constants/features';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { AdminPanel } from './pages/AdminPanel';
 import { AdminOverview } from './pages/AdminOverview';
-import { AdminStub, AdminRules } from './pages/AdminStub';
+import { AdminStub } from './pages/AdminStub';
+import { AdminScoreCards } from './pages/AdminScoreCards';
 import { Leaderboard } from './pages/Leaderboard';
 import { Feed } from './pages/Feed';
 import { Today } from './pages/Today';
@@ -43,6 +47,7 @@ import { Qualifiers } from './pages/Qualifiers';
 import { WeeklyReport } from './pages/WeeklyReport';
 import { Beyond } from './pages/Beyond';
 import { Profile } from './pages/Profile';
+import { ResetPassword } from './pages/ResetPassword';
 
 function isoWeekKey(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -72,7 +77,7 @@ const PAGE_TITLES: Record<ActiveView, [string, string]> = {
 const ADMIN_TITLES: Record<AdminView, [string, string]> = {
   overview: ['Admin Overview', 'Community health at a glance.'],
   participants: ['Participants', 'Manage access and eligibility.'],
-  rules: ['Challenge Rules', 'Reference for how scoring currently works.'],
+  rules: ['Score Cards', 'Edit the point values the scoring engine uses.'],
   events: ['Events & Bonuses', 'Create group activities and power bonuses.'],
   moderation: ['Proof & Moderation', 'Review evidence and score exceptions.'],
   analytics: ['Analytics', 'Participation, balance and drop-off.'],
@@ -93,11 +98,14 @@ export default function App() {
     signOut,
     refreshMyProfile,
     isViewingReadOnly,
+    isPasswordRecovery,
   } = useAuth();
 
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [dismissedTeamPrompt, setDismissedTeamPrompt] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [savingToday, setSavingToday] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [groupWorkouts, setGroupWorkouts] = useState<GroupWorkout[]>([]);
@@ -105,6 +113,7 @@ export default function App() {
   const [healthReports, setHealthReports] = useState<HealthReport[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
+  const [, setScoringConfigVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateStr());
   const [activeView, setActiveView] = useState<ActiveView>('today');
   const [inAdminArea, setInAdminArea] = useState(false);
@@ -138,6 +147,19 @@ export default function App() {
   useEffect(() => {
     if (TEAMS_ENABLED) fetchAllTeams().then(setTeams);
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    // Load the admin's saved scoring thresholds (if any) so every
+    // calculation in the app uses them from here on. Defaults apply
+    // instantly while this loads, so nothing is ever blocked on it.
+    fetchScoringConfig().then((config) => {
+      if (config) {
+        setScoringThresholds(config);
+        setScoringConfigVersion((v) => v + 1); // force score recalculation with the new thresholds
+      }
+    });
+  }, [session]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -216,14 +238,32 @@ export default function App() {
       if (!prevScore.allDimensionsCompleted && nextScore.allDimensionsCompleted) triggerConfetti();
       setDailyLogs((prev) => ({ ...prev, [updatedLog.date]: updatedLog }));
       try {
-        await saveDailyLog(targetUserId, updatedLog, actingProfile?.fullName || profile?.fullName);
+        await saveDailyLog(targetUserId, updatedLog);
         setSaveError(null);
       } catch (err: any) {
         setSaveError(err?.message || "Couldn't save your changes — check your connection and try again.");
       }
     },
-    [dailyLogs, triggerConfetti, targetUserId, actingProfile, profile]
+    [dailyLogs, triggerConfetti, targetUserId]
   );
+
+  const handleSaveAndShare = useCallback(async () => {
+    if (!targetUserId) return;
+    setSavingToday(true);
+    try {
+      await saveDailyLog(targetUserId, currentLog);
+      const fullName = actingProfile?.fullName || profile?.fullName;
+      if (fullName) {
+        await shareLogToCommunity(targetUserId, fullName, currentLog);
+      }
+      setSaveError(null);
+      setToastMessage('Saved & shared to Community ✓');
+    } catch (err: any) {
+      setSaveError(err?.message || "Couldn't save your changes — check your connection and try again.");
+    } finally {
+      setSavingToday(false);
+    }
+  }, [targetUserId, currentLog, actingProfile, profile]);
 
   const handleToggleWorkout = useCallback(async () => {
     if (!targetUserId || isViewingReadOnly) return;
@@ -299,6 +339,10 @@ export default function App() {
         <div className="sub">Loading…</div>
       </div>
     );
+  }
+
+  if (isPasswordRecovery) {
+    return <ResetPassword />;
   }
 
   if (!session) {
@@ -409,7 +453,7 @@ export default function App() {
                   }}
                 />
               )}
-              {activeAdminView === 'rules' && <AdminRules />}
+              {activeAdminView === 'rules' && <AdminScoreCards />}
               {(['events', 'moderation', 'analytics', 'announcements', 'audit', 'integrations'] as const).includes(
                 activeAdminView as any
               ) && <AdminStub kind={activeAdminView as any} />}
@@ -445,6 +489,8 @@ export default function App() {
                     currentCharityRecord={currentCharityRecord}
                     monthKey={activeMonthKey}
                     onDone={() => setActiveView('today')}
+                    onSaveAndShare={handleSaveAndShare}
+                    saving={savingToday}
                     readOnly={isViewingReadOnly}
                   />
                   <HealthReportUpload
@@ -527,6 +573,8 @@ export default function App() {
         onDataImported={reloadData}
         userId={targetUserId || ''}
       />
+
+      {toastMessage && <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />}
     </div>
   );
 }

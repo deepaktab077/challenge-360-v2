@@ -171,6 +171,14 @@ create table if not exists public.feed_reactions (
   unique (post_id, user_id, emoji)
 );
 
+create table if not exists public.feed_comments (
+  id text primary key,
+  post_id text not null references public.feed_posts (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
@@ -182,6 +190,7 @@ alter table public.charity_records enable row level security;
 alter table public.health_reports enable row level security;
 alter table public.feed_posts enable row level security;
 alter table public.feed_reactions enable row level security;
+alter table public.feed_comments enable row level security;
 
 -- Helper: is the current user an admin?
 create or replace function public.is_admin()
@@ -327,6 +336,20 @@ drop policy if exists "feed_reactions_delete_own" on public.feed_reactions;
 create policy "feed_reactions_delete_own" on public.feed_reactions
   for delete using (user_id = auth.uid());
 
+-- FEED COMMENTS policies — visible to all, own comments editable/deletable
+-- only by their author (or admin, for moderation).
+drop policy if exists "feed_comments_select_all_authenticated" on public.feed_comments;
+create policy "feed_comments_select_all_authenticated" on public.feed_comments
+  for select to authenticated using (true);
+
+drop policy if exists "feed_comments_insert_own" on public.feed_comments;
+create policy "feed_comments_insert_own" on public.feed_comments
+  for insert with check (user_id = auth.uid());
+
+drop policy if exists "feed_comments_delete_own_or_admin" on public.feed_comments;
+create policy "feed_comments_delete_own_or_admin" on public.feed_comments
+  for delete using (user_id = auth.uid() or public.is_admin());
+
 -- ============================================================================
 -- LEADERBOARD FUNCTIONS
 -- ============================================================================
@@ -435,6 +458,33 @@ insert into public.teams (name, description) values
   ('Team Bravo', ''),
   ('Team Charlie', '')
 on conflict (name) do nothing;
+
+-- ============================================================================
+-- SCORING CONFIGURATION (admin-editable point thresholds)
+-- ============================================================================
+-- Single row holding every scoring threshold as JSON. The app falls back to
+-- built-in defaults (src/constants/rules.ts) if this table is empty, so
+-- nothing breaks if you never touch it.
+create table if not exists public.scoring_config (
+  id text primary key default 'default',
+  config jsonb not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references public.profiles (id)
+);
+
+alter table public.scoring_config enable row level security;
+
+drop policy if exists "scoring_config_select_all_authenticated" on public.scoring_config;
+create policy "scoring_config_select_all_authenticated" on public.scoring_config
+  for select to authenticated using (true);
+
+drop policy if exists "scoring_config_write_admin_only" on public.scoring_config;
+create policy "scoring_config_write_admin_only" on public.scoring_config
+  for insert with check (public.is_admin());
+
+drop policy if exists "scoring_config_update_admin_only" on public.scoring_config;
+create policy "scoring_config_update_admin_only" on public.scoring_config
+  for update using (public.is_admin());
 
 -- ============================================================================
 -- MAKE YOURSELF THE FIRST SUPER USER

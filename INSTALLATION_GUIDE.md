@@ -27,10 +27,11 @@ anywhere in this stack.
    `charity_records`, `health_reports`, all security rules, and seeds 3
    starter teams (edit/delete these from the Admin panel later).
 
-### 1.3 Turn on email confirmation for self-signup
-1. **Authentication → Providers → Email** → make sure **Confirm email** is
-   switched ON (it is by default). This is what makes the "check your inbox"
-   step in the signup flow actually required.
+### 1.3 Disable email confirmation for self-signup
+1. **Authentication → Providers → Email** → switch **Confirm email** OFF.
+   Self-signup must create an authenticated session immediately; no confirmation
+   email is sent. Email is used for authentication communication only for
+   password recovery.
 2. **Authentication → URL Configuration** → set:
    - **Site URL**: your deployed URL (e.g. `https://pillar-rose.vercel.app`)
    - **Redirect URLs**: add that same URL, and `http://localhost:5173` if
@@ -101,7 +102,7 @@ account from 1.4 — you should land on the scorecard with **Admin** and
 1. **Admin tab → Teams** — rename/delete the 3 seed teams or add your real
    team names.
 2. Share the site URL with participants. They can:
-   - **Self-signup**: fill the form, confirm via email, log in.
+   - **Self-signup**: fill the form, create the account, and continue directly into the app; no email confirmation is required.
    - Or you create their account directly from Admin → New Participant, same
      as before.
    - (They'll see a one-time "Welcome" prompt on first login if teams are
@@ -136,6 +137,6 @@ account from 1.4 — you should land on the scorecard with **Admin** and
 |---|---|
 | Health report upload fails | Check that `supabase/schema.sql` ran fully — it creates the `health-reports` storage bucket and its access policies |
 | "Failed to open popup window" on upload | Browser blocked the popup — check the address bar for a blocked-popup icon and allow it for this site, then try again |
-| Signup confirmation email never arrives | Check spam; confirm "Confirm email" is ON in Supabase; Supabase's default sender has modest rate limits — for larger groups set up custom SMTP |
+| Signup does not log the user in immediately | Confirm **Confirm email** is OFF in Supabase Authentication → Providers → Email. The application no longer uses signup confirmation emails. |
 | Leaderboard shows 0 for everyone | Scores are only written going forward — logs saved before this update won't have the new score columns until edited/re-saved once |
 | Admin tab / Leaderboard blank | Re-check `supabase/schema.sql` ran fully without errors (scroll up in the SQL editor output) |

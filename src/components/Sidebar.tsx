@@ -32,7 +32,7 @@ export type AdminView = 'overview' | 'participants' | 'rules' | 'events' | 'mode
 const ADMIN_NAV: { id: AdminView; label: string; icon: string }[] = [
   { id: 'overview', label: 'Admin Overview', icon: '⌂' },
   { id: 'participants', label: 'Participants', icon: '♙' },
-  { id: 'rules', label: 'Challenge Rules', icon: '⚙' },
+  { id: 'rules', label: 'Score Cards', icon: '⚙' },
   { id: 'events', label: 'Events & Bonuses', icon: '◫' },
   { id: 'moderation', label: 'Proof & Moderation', icon: '✓' },
   { id: 'analytics', label: 'Analytics', icon: '▥' },

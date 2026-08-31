@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Lock, Mail, User, UserPlus, AlertCircle, CheckCircle2, Users, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, User, UserPlus, AlertCircle, Users, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAllTeams } from '../services/dataService';
 import { Team } from '../types';
@@ -19,15 +19,30 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
   const [teamId, setTeamId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [confirmationSent, setConfirmationSent] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   useEffect(() => {
     if (TEAMS_ENABLED) fetchAllTeams().then(setTeams);
   }, []);
 
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const t = setInterval(() => setCooldownSeconds((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldownSeconds]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (cooldownSeconds > 0 || submitting) return; // avoid duplicate/rapid-fire requests
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(normalizedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
@@ -35,43 +50,22 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
     }
 
     setSubmitting(true);
-    const result = await signUp(email.trim(), password, fullName.trim(), teamId || null);
+    const result = await signUp(normalizedEmail, password, fullName.trim(), teamId || null);
     setSubmitting(false);
 
     if (result.error) {
       if (/rate limit/i.test(result.error)) {
-        setError(
-          'Too many signups too quickly — Supabase\'s free email service limits how many confirmation emails can go out per hour. Wait a few minutes and try again, or ask your admin to set up custom SMTP for higher limits (see INSTALLATION_GUIDE.md).'
-        );
+        setError('Too many signup attempts. Please wait a moment before trying again.');
+        setCooldownSeconds(60);
       } else {
         setError(result.error);
       }
       return;
     }
-    if (result.needsEmailConfirmation) {
-      setConfirmationSent(true);
-    }
-  };
 
-  if (confirmationSent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center border border-emerald-500/30 mb-4">
-            <CheckCircle2 className="w-7 h-7" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-100 mb-2">Check your inbox</h1>
-          <p className="text-sm text-slate-500 mb-6">
-            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come
-            back and log in.
-          </p>
-          <button onClick={onSwitchToLogin} className="text-sm font-semibold text-indigo-600 hover:underline">
-            Back to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+    // Email confirmation is disabled, so Supabase has created an active
+    // session. AuthContext will load the profile and the app will open normally.
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-10">
@@ -172,11 +166,11 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || cooldownSeconds > 0}
               className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors"
             >
               <UserPlus className="w-4 h-4" />
-              {submitting ? 'Creating account…' : 'Create Account'}
+              {submitting ? 'Creating account…' : cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : 'Create Account'}
             </button>
           </form>
         </div>

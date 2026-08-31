@@ -26,7 +26,9 @@ interface AuthContextValue {
     password: string,
     fullName: string,
     teamId: string | null
-  ) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
+   ) => Promise<{ error: string | null }>;
+  isPasswordRecovery: boolean;
+  clearPasswordRecovery: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -38,6 +40,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [allProfiles, setAllProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingUserId, setActingUserIdState] = useState<string | null>(null);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(
+    typeof window !== 'undefined' && window.location.hash.includes('type=recovery')
+  );
 
   const loadProfile = useCallback(async (userId: string) => {
     const p = await fetchMyProfile(userId);
@@ -60,7 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true);
       setSession(newSession);
       if (newSession?.user) {
         loadProfile(newSession.user.id);
@@ -105,13 +111,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           emailRedirectTo: window.location.origin,
         },
       });
-      if (error) return { error: error.message, needsEmailConfirmation: false };
-      // If email confirmation is required, Supabase returns a user with no session yet.
-      const needsEmailConfirmation = !data.session;
-      return { error: null, needsEmailConfirmation };
+      if (error) return { error: error.message };
+      if (!data.session) {
+        return {
+          error: 'Signup succeeded but no session was created. Disable "Confirm email" in Supabase Authentication → Providers → Email to allow immediate login.',
+        };
+      }
+      return { error: null };
     },
     []
   );
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -136,6 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshMyProfile,
     signIn,
     signUp,
+    isPasswordRecovery,
+    clearPasswordRecovery,
     signOut,
   };
 

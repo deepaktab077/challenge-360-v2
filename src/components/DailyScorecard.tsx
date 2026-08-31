@@ -23,6 +23,8 @@ interface DailyScorecardProps {
   currentCharityRecord: MonthlyCharityRecord | undefined;
   monthKey: string;
   onDone: () => void;
+  onSaveAndShare: () => void;
+  saving?: boolean;
   readOnly?: boolean;
 }
 
@@ -32,6 +34,8 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
   openCharityModal,
   currentCharityRecord,
   onDone,
+  onSaveAndShare,
+  saving,
   readOnly,
 }) => {
   const updateBody = (patch: Partial<DailyLog['body']>) =>
@@ -251,9 +255,19 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
               : 'Complete every pillar to earn +5.'}
           </div>
           {!readOnly && (
-            <button className="btn-primary" style={{ width: '100%', marginTop: 12 }} onClick={onDone}>
-              Back to Today
-            </button>
+            <>
+              <button
+                className="btn-primary"
+                style={{ width: '100%', marginTop: 12 }}
+                onClick={onSaveAndShare}
+                disabled={saving}
+              >
+                {saving ? 'Saving…' : 'Save & Share to Community'}
+              </button>
+              <button className="btn-secondary" style={{ width: '100%', marginTop: 8 }} onClick={onDone}>
+                Back to Today
+              </button>
+            </>
           )}
         </div>
       </div>
