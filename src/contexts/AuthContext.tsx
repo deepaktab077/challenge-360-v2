@@ -27,7 +27,6 @@ interface AuthContextValue {
     fullName: string,
     teamId: string | null
   ) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
-  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -114,14 +113,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const signInWithGoogle = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    });
-    return { error: error ? error.message : null };
-  }, []);
-
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -145,7 +136,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshMyProfile,
     signIn,
     signUp,
-    signInWithGoogle,
     signOut,
   };
 

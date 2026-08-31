@@ -7,6 +7,7 @@ import {
   LeaderboardPeriod,
 } from '../services/dataService';
 import { IndividualLeaderboardEntry, TeamLeaderboardEntry } from '../types';
+import { TEAMS_ENABLED } from '../constants/features';
 import { useAuth } from '../contexts/AuthContext';
 import { UserProfileModal } from '../components/UserProfileModal';
 
@@ -14,11 +15,11 @@ type Category = 'overall' | 'body' | 'mind' | 'heart' | 'soul' | 'team';
 
 const CATEGORIES: { id: Category; label: string; Icon: React.ElementType }[] = [
   { id: 'overall', label: 'Overall', Icon: Trophy },
-  { id: 'body', label: 'Body Masters', Icon: Footprints },
-  { id: 'mind', label: 'Mind Sages', Icon: Brain },
-  { id: 'heart', label: 'Heart Healers', Icon: Heart },
-  { id: 'soul', label: 'Soul Seekers', Icon: Sparkles },
-  { id: 'team', label: 'Teams', Icon: Users },
+  { id: 'body', label: 'Body Prime', Icon: Footprints },
+  { id: 'mind', label: 'Mind Spark', Icon: Brain },
+  { id: 'heart', label: 'Heart Pulse', Icon: Heart },
+  { id: 'soul', label: 'Soul Glow', Icon: Sparkles },
+  ...(TEAMS_ENABLED ? [{ id: 'team' as Category, label: 'Teams', Icon: Users }] : []),
 ];
 
 const PERIODS: { id: LeaderboardPeriod; label: string }[] = [
@@ -303,14 +304,16 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
                   <p className="text-xs font-bold text-slate-200 text-center truncate w-full">{entry.fullName}</p>
                   <p className="text-[11px] font-black text-amber-400">{scoreFor(entry, category)} pts</p>
                   <div
-                    className={`w-full ${podiumHeights[i]} rounded-t-xl mt-2 bg-gradient-to-t ${
+                    className={`w-full ${podiumHeights[i]} rounded-t-xl mt-2 bg-gradient-to-t flex items-start justify-center pt-2 ${
                       podiumRankOrder[i] === 1
                         ? 'from-amber-600 to-amber-400'
                         : podiumRankOrder[i] === 2
                         ? 'from-slate-600 to-slate-400'
                         : 'from-orange-700 to-orange-500'
                     }`}
-                  />
+                  >
+                    <span className="text-white font-black text-lg drop-shadow">#{podiumRankOrder[i]}</span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -325,13 +328,13 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="w-8 h-8 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center text-sm font-black flex-shrink-0">
-                    {i + 1}
+                  <span className="w-8 h-8 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-black flex-shrink-0">
+                    #{i + 1}
                   </span>
                   <div className="min-w-0">
                     <p className="font-bold text-sm text-slate-100 truncate">{e.fullName}</p>
                     <p className="text-xs text-slate-500 truncate">
-                      {e.teamName || 'No team'} · Goal {e.goalProgress}%
+                      {TEAMS_ENABLED ? `${e.teamName || 'No team'} · ` : ''}Goal {e.goalProgress}%
                     </p>
                   </div>
                 </div>

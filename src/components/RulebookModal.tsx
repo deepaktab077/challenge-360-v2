@@ -77,7 +77,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
           {/* BODY */}
           <section>
             <h4 className="text-sm font-black text-indigo-400 uppercase tracking-wide mb-1">
-              Body — Move · Nourish · Hydrate · Recover
+              Body Prime — Move · Nourish · Hydrate · Recover
             </h4>
             <div className="bg-slate-800/40 border border-slate-800 rounded-xl px-4">
               <RuleRow
@@ -128,7 +128,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
           {/* MIND */}
           <section>
             <h4 className="text-sm font-black text-rose-400 uppercase tracking-wide mb-1">
-              Mind — Learn · Grow · Disconnect
+              Mind Spark — Learn · Grow · Disconnect
             </h4>
             <div className="bg-slate-800/40 border border-slate-800 rounded-xl px-4">
               <RuleRow
@@ -149,7 +149,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
           {/* HEART */}
           <section>
             <h4 className="text-sm font-black text-pink-400 uppercase tracking-wide mb-1">
-              Heart — Connect · Care · Give
+              Heart Pulse — Connect · Care · Give
             </h4>
             <div className="bg-slate-800/40 border border-slate-800 rounded-xl px-4">
               <RuleRow
@@ -170,7 +170,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
           {/* SOUL */}
           <section>
             <h4 className="text-sm font-black text-purple-400 uppercase tracking-wide mb-1">
-              Soul — Pause · Breathe · Reconnect
+              Soul Glow — Pause · Breathe · Reconnect
             </h4>
             <div className="bg-slate-800/40 border border-slate-800 rounded-xl px-4">
               <RuleRow

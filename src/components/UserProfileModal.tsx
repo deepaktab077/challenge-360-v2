@@ -3,6 +3,7 @@ import { X, Flame, Gift, AlertTriangle, Shield, Loader2 } from 'lucide-react';
 import { IndividualLeaderboardEntry } from '../types';
 import { fetchLatestFeedPostForUser, toggleFeedReaction, REACTION_EMOJIS } from '../services/dataService';
 import { useAuth } from '../contexts/AuthContext';
+import { TEAMS_ENABLED } from '../constants/features';
 
 interface UserProfileModalProps {
   entry: IndividualLeaderboardEntry;
@@ -11,10 +12,10 @@ interface UserProfileModalProps {
 }
 
 const PILLARS: { key: 'bodyScore' | 'mindScore' | 'heartScore' | 'soulScore'; label: string; max: number; color: string }[] = [
-  { key: 'bodyScore', label: 'Body', max: 40, color: 'bg-emerald-400' },
-  { key: 'mindScore', label: 'Mind', max: 20, color: 'bg-indigo-400' },
-  { key: 'heartScore', label: 'Heart', max: 10, color: 'bg-rose-400' },
-  { key: 'soulScore', label: 'Soul', max: 10, color: 'bg-purple-400' },
+  { key: 'bodyScore', label: 'Body Prime', max: 40, color: 'bg-emerald-400' },
+  { key: 'mindScore', label: 'Mind Spark', max: 20, color: 'bg-indigo-400' },
+  { key: 'heartScore', label: 'Heart Pulse', max: 10, color: 'bg-rose-400' },
+  { key: 'soulScore', label: 'Soul Glow', max: 10, color: 'bg-purple-400' },
 ];
 
 export function UserProfileModal({ entry, onClose, onEditAsAdmin }: UserProfileModalProps) {
@@ -63,7 +64,9 @@ export function UserProfileModal({ entry, onClose, onEditAsAdmin }: UserProfileM
           </div>
           <div className="min-w-0">
             <p className="font-bold text-slate-100 truncate">{entry.fullName}</p>
-            <p className="text-xs text-slate-500 truncate">{entry.teamName || 'No team'} · Rank #{entry.rank}</p>
+            <p className="text-xs text-slate-500 truncate">
+              {TEAMS_ENABLED ? `${entry.teamName || 'No team'} · ` : ''}Rank #{entry.rank}
+            </p>
           </div>
         </div>
 

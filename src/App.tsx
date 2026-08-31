@@ -30,6 +30,7 @@ import { MonthlyCharityModal } from './components/MonthlyCharityModal';
 import { RulebookModal } from './components/RulebookModal';
 import { ExportImportModal } from './components/ExportImportModal';
 import { CompleteProfileModal } from './components/CompleteProfileModal';
+import { TEAMS_ENABLED } from './constants/features';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { AdminPanel } from './pages/AdminPanel';
@@ -85,7 +86,7 @@ export default function App() {
   }, []);
 
   const myTeamName = useMemo(
-    () => teams.find((t) => t.id === (actingProfile?.teamId ?? profile?.teamId))?.name || null,
+    () => (TEAMS_ENABLED ? teams.find((t) => t.id === (actingProfile?.teamId ?? profile?.teamId))?.name || null : null),
     [teams, actingProfile, profile]
   );
 
@@ -254,7 +255,8 @@ export default function App() {
     );
   }
 
-  const needsTeamCompletion = !!profile && profile.role === 'user' && !profile.teamId && !dismissedTeamPrompt;
+  const needsTeamCompletion =
+    TEAMS_ENABLED && !!profile && profile.role === 'user' && !profile.teamId && !dismissedTeamPrompt;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-600 selection:text-white flex flex-col justify-between">

@@ -270,7 +270,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold mb-1">
                 <span className="text-emerald-300 flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5" />
-                  Body Pillar (Max 40 pts/day)
+                  Body Prime (Max 40 pts/day)
                 </span>
                 <span className="text-white font-bold">{bodyScoreSum} pts earned</span>
               </div>
@@ -287,7 +287,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold mb-1">
                 <span className="text-indigo-300 flex items-center gap-1.5">
                   <Brain className="w-3.5 h-3.5" />
-                  Mind Pillar (Max 20 pts/day)
+                  Mind Spark (Max 20 pts/day)
                 </span>
                 <span className="text-white font-bold">{mindScoreSum} pts earned</span>
               </div>
@@ -304,7 +304,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold mb-1">
                 <span className="text-rose-300 flex items-center gap-1.5">
                   <Heart className="w-3.5 h-3.5" />
-                  Heart Pillar (Max 10 pts/day)
+                  Heart Pulse (Max 10 pts/day)
                 </span>
                 <span className="text-white font-bold">{heartScoreSum} pts earned</span>
               </div>
@@ -321,7 +321,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold mb-1">
                 <span className="text-amber-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5" />
-                  Soul Pillar (Max 10 pts/day)
+                  Soul Glow (Max 10 pts/day)
                 </span>
                 <span className="text-white font-bold">{soulScoreSum} pts earned</span>
               </div>

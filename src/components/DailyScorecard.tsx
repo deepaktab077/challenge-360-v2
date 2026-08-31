@@ -82,16 +82,17 @@ const COLOR_CLASSES: Record<
 };
 
 const PillarSection: React.FC<{
+  id?: string;
   number: number;
   title: string;
   subtitle: string;
   maxPoints: number;
   color: PillarColor;
   children: React.ReactNode;
-}> = ({ number, title, subtitle, maxPoints, color, children }) => {
+}> = ({ id, number, title, subtitle, maxPoints, color, children }) => {
   const c = COLOR_CLASSES[color];
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
+    <div id={id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm scroll-mt-20">
       <div className="flex items-center justify-between pb-4 border-b border-slate-800/60">
         <div className="flex items-center space-x-3">
           <span className={`w-2.5 h-6 ${c.bar} rounded-full inline-block`}></span>
@@ -239,8 +240,9 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
     <div className="space-y-8">
       {/* BODY */}
       <PillarSection
+        id="pillar-body"
         number={1}
-        title="Body Pillar"
+        title="Body Prime"
         subtitle="Move · Nourish · Hydrate · Recover"
         maxPoints={40}
         color="indigo"
@@ -366,7 +368,7 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
       </PillarSection>
 
       {/* MIND */}
-      <PillarSection number={2} title="Mind Pillar" subtitle="Learn · Grow · Disconnect" maxPoints={20} color="rose">
+      <PillarSection id="pillar-mind" number={2} title="Mind Spark" subtitle="Learn · Grow · Disconnect" maxPoints={20} color="rose">
         <ItemCard
           icon={<BookOpen className="w-3.5 h-3.5" />}
           label="Meaningful Learning"
@@ -407,7 +409,7 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
       </PillarSection>
 
       {/* HEART */}
-      <PillarSection number={3} title="Heart Pillar" subtitle="Connect · Care · Give" maxPoints={10} color="pink">
+      <PillarSection id="pillar-heart" number={3} title="Heart Pulse" subtitle="Connect · Care · Give" maxPoints={10} color="pink">
         <ItemCard
           icon={<HeartHandshake className="w-3.5 h-3.5" />}
           label="Family Connection"
@@ -473,7 +475,7 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
       </PillarSection>
 
       {/* SOUL */}
-      <PillarSection number={4} title="Soul Pillar" subtitle="Pause · Breathe · Reconnect" maxPoints={10} color="purple">
+      <PillarSection id="pillar-soul" number={4} title="Soul Glow" subtitle="Pause · Breathe · Reconnect" maxPoints={10} color="purple">
         <div className="md:col-span-2">
           <ItemCard
             icon={<Sparkles className="w-3.5 h-3.5" />}

@@ -113,11 +113,11 @@ export const ScoreOverviewBanner: React.FC<ScoreOverviewBannerProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6">
         
         {/* Body Card */}
-        <div className="bg-slate-800/40 border border-slate-800/80 rounded-2xl p-4 relative">
+        <button onClick={() => document.getElementById('pillar-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="text-left bg-slate-800/40 border border-slate-800/80 hover:border-indigo-500/50 rounded-2xl p-4 relative transition-colors">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-5 bg-indigo-500 rounded-full inline-block"></span>
-              <span className="text-xs sm:text-sm font-bold text-slate-200">Body</span>
+              <span className="text-xs sm:text-sm font-bold text-slate-200">Body Prime</span>
             </div>
             <span className="text-xs font-bold text-indigo-600">
               {bodyScore} <span className="text-slate-400 font-normal">/ 40</span>
@@ -131,14 +131,14 @@ export const ScoreOverviewBanner: React.FC<ScoreOverviewBannerProps> = ({
             />
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-2">Steps, Nutrition, Hydration, Sleep</p>
-        </div>
+        </button>
 
         {/* Mind Card */}
-        <div className="bg-slate-800/40 border border-slate-800/80 rounded-2xl p-4 relative">
+        <button onClick={() => document.getElementById('pillar-mind')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="text-left bg-slate-800/40 border border-slate-800/80 hover:border-orange-400/50 rounded-2xl p-4 relative transition-colors">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-5 bg-orange-400 rounded-full inline-block"></span>
-              <span className="text-xs sm:text-sm font-bold text-slate-200">Mind</span>
+              <span className="text-xs sm:text-sm font-bold text-slate-200">Mind Spark</span>
             </div>
             <span className="text-xs font-bold text-orange-600">
               {mindScore} <span className="text-slate-400 font-normal">/ 20</span>
@@ -151,14 +151,14 @@ export const ScoreOverviewBanner: React.FC<ScoreOverviewBannerProps> = ({
             />
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-2">Reading/Podcast, Screen Discipline</p>
-        </div>
+        </button>
 
         {/* Heart Card */}
-        <div className="bg-slate-800/40 border border-slate-800/80 rounded-2xl p-4 relative">
+        <button onClick={() => document.getElementById('pillar-heart')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="text-left bg-slate-800/40 border border-slate-800/80 hover:border-pink-500/50 rounded-2xl p-4 relative transition-colors">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-5 bg-pink-500 rounded-full inline-block"></span>
-              <span className="text-xs sm:text-sm font-bold text-slate-200">Heart</span>
+              <span className="text-xs sm:text-sm font-bold text-slate-200">Heart Pulse</span>
             </div>
             <span className="text-xs font-bold text-pink-600">
               {heartScore} <span className="text-slate-400 font-normal">/ 10</span>
@@ -171,14 +171,14 @@ export const ScoreOverviewBanner: React.FC<ScoreOverviewBannerProps> = ({
             />
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-2">Family Connection (+ Monthly Charity qualifier)</p>
-        </div>
+        </button>
 
         {/* Soul Card */}
-        <div className="bg-slate-800/40 border border-slate-800/80 rounded-2xl p-4 relative">
+        <button onClick={() => document.getElementById('pillar-soul')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="text-left bg-slate-800/40 border border-slate-800/80 hover:border-purple-500/50 rounded-2xl p-4 relative transition-colors">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-5 bg-purple-500 rounded-full inline-block"></span>
-              <span className="text-xs sm:text-sm font-bold text-slate-200">Soul</span>
+              <span className="text-xs sm:text-sm font-bold text-slate-200">Soul Glow</span>
             </div>
             <span className="text-xs font-bold text-purple-600">
               {soulScore} <span className="text-slate-400 font-normal">/ 10</span>
@@ -191,7 +191,7 @@ export const ScoreOverviewBanner: React.FC<ScoreOverviewBannerProps> = ({
             />
           </div>
           <p className="text-[11px] text-slate-500 font-medium mt-2">Meditation & Conscious Pranayam</p>
-        </div>
+        </button>
 
       </div>
 

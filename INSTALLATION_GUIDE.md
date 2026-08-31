@@ -1,7 +1,9 @@
 # Challenge 360° — Installation Guide
 
-Everything from zero to a live, multi-team app with self-signup, Google
-sign-in, per-user Google Drive uploads, and a leaderboard. No paid services
+Everything from zero to a live app with self-signup, per-user Google Drive
+uploads, and a leaderboard. Teams are built in but hidden by default — flip
+`TEAMS_ENABLED` in `src/constants/features.ts` to turn them back on. No paid
+services
 anywhere in this stack.
 
 **Total time:** ~30–40 minutes (most of it is the Google Cloud step).
@@ -46,10 +48,11 @@ anywhere in this stack.
 
 ---
 
-## Part 2 — Google Cloud (Sign-in + Drive uploads)
+## Part 2 — Google Cloud (health report Drive uploads)
 
-This single Google Cloud project/OAuth client powers **both** "Continue with
-Google" login and the "upload to your own Drive" health-report feature.
+Google is used for exactly one thing now: letting participants upload wearable
+screenshots straight into **their own** Google Drive. There's no "Continue
+with Google" login anymore — email/password is the only sign-in method.
 
 ### 2.1 Create the project
 1. https://console.cloud.google.com → create a new project (any name).
@@ -63,11 +66,9 @@ Google" login and the "upload to your own Drive" health-report feature.
    Workspace account on the same domain, in which case **Internal** is
    simpler and skips verification entirely).
 3. Fill in app name (e.g. "Challenge 360"), your email, etc.
-4. **Scopes** → add:
-   - `.../auth/userinfo.email`, `.../auth/userinfo.profile`, `openid` (sign-in)
-   - `https://www.googleapis.com/auth/drive.file` (Drive upload — this scope
-     only lets the app see files *it* creates, never a participant's whole
-     Drive)
+4. **Scopes** → add `https://www.googleapis.com/auth/drive.file` — this
+   scope only lets the app see files *it* creates, never a participant's
+   whole Drive.
 5. **Test users** (if External + Testing status): add every participant's
    Google email here. Apps in "Testing" mode only work for listed test users
    (up to 100) unless you complete Google's verification review — for a
@@ -80,17 +81,18 @@ Google" login and the "upload to your own Drive" health-report feature.
 3. **Authorized JavaScript origins** — add your site URL(s):
    - `https://pillar-rose.vercel.app` (your deployed URL)
    - `http://localhost:5173` (for local dev, optional)
-4. **Authorized redirect URIs** — add your Supabase auth callback (needed
-   only for "Continue with Google" login, not for the Drive upload):
-   - `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`
-5. Save. Copy the **Client ID** and **Client Secret**.
+4. No redirect URI or client secret needed — this is a public client used
+   only for the Drive upload popup.
+5. Save and copy the **Client ID**.
 
-### 2.5 Plug it into Supabase (enables "Continue with Google" login)
-1. Supabase Dashboard → **Authentication → Providers → Google** → toggle on.
-2. Paste the **Client ID** and **Client Secret** from step 2.4. Save.
+### 2.5 Plug it into your app
+Set `VITE_GOOGLE_CLIENT_ID` = that Client ID in Part 3 below.
 
-### 2.6 Plug it into your app (enables Drive uploads)
-You'll set `VITE_GOOGLE_CLIENT_ID` = the same Client ID in Part 3 below.
+**If uploads still fail after this:** it's almost always one of —
+your Google account isn't in the Test Users list (2.3), the site's exact URL
+isn't in Authorized JavaScript origins (2.4), or the browser is blocking the
+popup (check the address bar for a blocked-popup icon and allow it for this
+site).
 
 ---
 
@@ -117,8 +119,8 @@ environments:
 Redeploy after adding these (Deployments → ⋯ → Redeploy).
 
 ### 3.3 Verify
-Open your live URL. You should see the login screen with a **Continue with
-Google** button and a **Create an account** link. Log in with the admin
+Open your live URL. You should see the login screen with a **Create an
+account** link. Log in with the admin
 account from 1.4 — you should land on the scorecard with **Admin** and
 **Leaderboard** tabs visible.
 
@@ -129,9 +131,7 @@ account from 1.4 — you should land on the scorecard with **Admin** and
 1. **Admin tab → Teams** — rename/delete the 3 seed teams or add your real
    team names.
 2. Share the site URL with participants. They can:
-   - **Self-signup**: fill the form, pick their team, confirm via email, log in.
-   - **Google sign-in**: one click — they'll be prompted to pick a team on
-     first login (the "Welcome" modal).
+   - **Self-signup**: fill the form, confirm via email, log in.
    - Or you create their account directly from Admin → New Participant, same
      as before.
 3. Everyone's scores now show up on the **Leaderboard** tab (individual and
@@ -151,7 +151,8 @@ account from 1.4 — you should land on the scorecard with **Admin** and
   browser into *their own* Google Drive (a folder called "Challenge 360 -
   Health Reports" the app creates on first use). Only a link/thumbnail
   pointer is stored in our database — the image itself never touches our
-  servers.
+  servers. This is the only thing Google is used for now — there's no
+  "Sign in with Google" option, just email/password.
 - **Email notifications** (signup confirmation, forgot password) are sent by
   Supabase's built-in auth email service automatically — no extra setup
   needed for a group this size. If you outgrow the default sending limits,
@@ -164,8 +165,7 @@ account from 1.4 — you should land on the scorecard with **Admin** and
 |---|---|
 | "Google Drive isn't configured yet" | `VITE_GOOGLE_CLIENT_ID` missing in Vercel, or not redeployed |
 | Google popup says "Error 403: access_denied" | Your Google account isn't in the OAuth consent screen's Test Users list (Part 2.3) |
-| "Continue with Google" login fails | Client ID/Secret not saved in Supabase → Authentication → Providers → Google, or the Supabase callback URL isn't in the Google Client's Authorized redirect URIs |
+| "Failed to open popup window" on upload | Browser blocked the popup — check the address bar for a blocked-popup icon and allow it for this site, then try again |
 | Signup confirmation email never arrives | Check spam; confirm "Confirm email" is ON in Supabase; Supabase's default sender has modest rate limits — for larger groups set up custom SMTP |
-| New Google sign-in user has no team | Expected — they'll see the "Welcome to Challenge 360" modal on first login prompting them to pick one |
 | Leaderboard shows 0 for everyone | Scores are only written going forward — logs saved before this update won't have the new score columns until edited/re-saved once |
 | Admin tab / Leaderboard blank | Re-check `supabase/schema.sql` ran fully without errors (scroll up in the SQL editor output) |

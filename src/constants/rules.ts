@@ -6,7 +6,7 @@ import { DailyLog, PillarScoreBreakdown } from '../types';
 
 export const SCORING_RULES = {
   body: {
-    title: 'Body',
+    title: 'Body Prime',
     subtitle: 'Move | Nourish | Hydrate | Recover',
     maxPoints: 40,
     color: 'emerald',
@@ -63,7 +63,7 @@ export const SCORING_RULES = {
     },
   },
   mind: {
-    title: 'Mind',
+    title: 'Mind Spark',
     subtitle: 'Learn | Grow | Disconnect',
     maxPoints: 20,
     color: 'indigo',
@@ -89,7 +89,7 @@ export const SCORING_RULES = {
     ],
   },
   heart: {
-    title: 'Heart',
+    title: 'Heart Pulse',
     subtitle: 'Connect | Care | Give',
     maxPoints: 10,
     color: 'rose',
@@ -114,7 +114,7 @@ export const SCORING_RULES = {
     },
   },
   soul: {
-    title: 'Soul',
+    title: 'Soul Glow',
     subtitle: 'Pause | Breathe | Reconnect',
     maxPoints: 10,
     color: 'amber',
