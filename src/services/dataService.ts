@@ -30,6 +30,7 @@ import {
   calculateBalanceScore,
   ScoringThresholds,
 } from '../constants/rules';
+import { AchievementTag, ACHIEVEMENT_DEFINITIONS } from './achievementService';
 
 // ============================================================================
 // PROFILES
@@ -147,10 +148,15 @@ export async function saveDailyLog(userId: string, log: DailyLog): Promise<void>
 }
 
 /** Explicitly shares today's progress to the Community feed. Only score
- * totals and pillar-completion are shared — never raw habit detail. Called
- * only when the user hits "Save & Share", not on every field edit. */
-export async function shareLogToCommunity(userId: string, fullName: string, log: DailyLog): Promise<void> {
-  await upsertFeedPostForLog(userId, fullName, log);
+ * totals and achievement labels are shared — never raw habit detail. Called
+ * only when the user hits the explicit save/post action. */
+export async function shareLogToCommunity(
+  userId: string,
+  fullName: string,
+  log: DailyLog,
+  achievements: AchievementTag[] = []
+): Promise<void> {
+  await upsertFeedPostForLog(userId, fullName, log, achievements);
 }
 
 function rowToDailyLog(row: any): DailyLog {
@@ -694,22 +700,43 @@ export async function updateUserGoal(userId: string, goalPoints: number): Promis
 const REACTION_EMOJIS = ['🔥', '💪', '👏', '❤️', '👑'] as const;
 export { REACTION_EMOJIS };
 
-function buildFeedMessage(fullName: string, score: number, allDimensionsCompleted: boolean, date: string): string {
+function buildFeedMessage(fullName: string, score: number, allDimensionsCompleted: boolean, date: string, achievements: AchievementTag[] = []): string {
   const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
-  if (allDimensionsCompleted) {
-    return `Logged ${score} pts on ${dateLabel} across all 4 pillars!`;
-  }
-  return `Logged ${score} pts on ${dateLabel}!`;
+  const base = allDimensionsCompleted
+    ? `Logged ${score} pts on ${dateLabel} across all 4 pillars!`
+    : `Logged ${score} pts on ${dateLabel}!`;
+  // Keep achievement data inside the existing message field so this feature
+  // works with already-deployed Supabase schemas without requiring a SQL
+  // migration or a new column. The UI extracts the marker before displaying it.
+  const ids = achievements.map((tag) => tag.id).join(',');
+  return ids ? `${base} [[ACHIEVEMENTS:${ids}]]` : base;
+}
+
+function parseFeedMessage(message: string): { message: string; achievements: AchievementTag[] } {
+  const match = message.match(/\s*\[\[ACHIEVEMENTS:([^\]]*)\]\]\s*$/);
+  if (!match) return { message, achievements: [] };
+  const ids = match[1].split(',').map((id) => id.trim()).filter(Boolean);
+  const achievements = ids
+    .map((id) => ACHIEVEMENT_DEFINITIONS.find((item) => item.id === id))
+    .filter(Boolean) as AchievementTag[];
+  return { message: message.replace(match[0], ''), achievements };
 }
 
 /** Called right after a daily log is saved — posts (or updates) that day's
  * feed card. Only the score summary is shared, never raw habit detail. */
-export async function upsertFeedPostForLog(userId: string, fullName: string, log: DailyLog): Promise<void> {
+export async function upsertFeedPostForLog(
+  userId: string,
+  fullName: string,
+  log: DailyLog,
+  achievements: AchievementTag[] = []
+): Promise<void> {
   const score = calculateDailyScore(log);
-  if (score.totalDailyScore <= 0) return; // nothing meaningful logged yet
-
-  const kind = score.allDimensionsCompleted ? 'complete_day' : 'log';
+  // Keep one Community post per participant per day. The post is updated
+  // when the participant saves again (including when they complete all four pillars).
+  const kind = 'log';
   const id = `feed_${userId}_${log.date}_${kind}`;
+  // Achievement labels are encoded in the existing message field; no new
+  // Supabase column is required.
   const payload = {
     id,
     user_id: userId,
@@ -717,10 +744,13 @@ export async function upsertFeedPostForLog(userId: string, fullName: string, log
     total_score: score.totalDailyScore,
     all_dimensions_completed: score.allDimensionsCompleted,
     kind,
-    message: buildFeedMessage(fullName, score.totalDailyScore, score.allDimensionsCompleted, log.date),
+    message: buildFeedMessage(fullName, score.totalDailyScore, score.allDimensionsCompleted, log.date, achievements),
     created_at: new Date().toISOString(),
   };
-  await supabase.from('feed_posts').upsert(payload, { onConflict: 'user_id,date,kind' });
+  const { error } = await supabase.from('feed_posts').upsert(payload, { onConflict: 'user_id,date,kind' });
+  if (error) {
+    throw new Error(`Couldn't publish today's achievement to Community: ${error.message}`);
+  }
 }
 
 export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
@@ -766,8 +796,9 @@ export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
       totalScore: row.total_score,
       allDimensionsCompleted: row.all_dimensions_completed,
       kind: row.kind,
-      message: row.message,
+      message: parseFeedMessage(row.message || '').message,
       createdAt: row.created_at,
+      achievementTags: parseFeedMessage(row.message || '').achievements,
       reactions: reactionsByPost.get(row.id) || [],
       comments: commentsByPost.get(row.id) || [],
     };
@@ -776,22 +807,26 @@ export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
 
 export async function addFeedComment(postId: string, userId: string, content: string): Promise<void> {
   const id = 'fc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-  await supabase.from('feed_comments').insert({ id, post_id: postId, user_id: userId, content: content.trim() });
+  const { error } = await supabase.from('feed_comments').insert({ id, post_id: postId, user_id: userId, content: content.trim() });
+  if (error) throw new Error(`Couldn't add comment: ${error.message}`);
 }
 
 export async function deleteFeedComment(commentId: string, userId: string): Promise<void> {
-  await supabase.from('feed_comments').delete().eq('id', commentId).eq('user_id', userId);
+  const { error } = await supabase.from('feed_comments').delete().eq('id', commentId).eq('user_id', userId);
+  if (error) throw new Error(`Couldn't delete comment: ${error.message}`);
 }
 
 export async function toggleFeedReaction(postId: string, userId: string, emoji: string, isActive: boolean): Promise<void> {
   if (isActive) {
-    await supabase.from('feed_reactions').delete().eq('post_id', postId).eq('user_id', userId).eq('emoji', emoji);
+    const { error } = await supabase.from('feed_reactions').delete().eq('post_id', postId).eq('user_id', userId).eq('emoji', emoji);
+    if (error) throw new Error(`Couldn't remove reaction: ${error.message}`);
   } else {
     const id = `rx_${postId}_${userId}_${emoji}`.replace(/[^a-zA-Z0-9_]/g, '');
-    await supabase.from('feed_reactions').upsert(
+    const { error } = await supabase.from('feed_reactions').upsert(
       { id, post_id: postId, user_id: userId, emoji, created_at: new Date().toISOString() },
       { onConflict: 'post_id,user_id,emoji' }
     );
+    if (error) throw new Error(`Couldn't add reaction: ${error.message}`);
   }
 }
 
@@ -816,8 +851,9 @@ export async function fetchLatestFeedPostForUser(userId: string): Promise<FeedPo
     totalScore: row.total_score,
     allDimensionsCompleted: row.all_dimensions_completed,
     kind: row.kind,
-    message: row.message,
+    message: parseFeedMessage(row.message || '').message,
     createdAt: row.created_at,
+    achievementTags: parseFeedMessage(row.message || '').achievements,
     reactions: postReactions,
     comments: [],
   };

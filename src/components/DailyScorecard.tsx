@@ -262,7 +262,7 @@ export const DailyScorecard: React.FC<DailyScorecardProps> = ({
                 onClick={onSaveAndShare}
                 disabled={saving}
               >
-                {saving ? 'Saving…' : 'Save & Share to Community'}
+                {saving ? 'Saving…' : 'Save & Post to Community'}
               </button>
               <button className="btn-secondary" style={{ width: '100%', marginTop: 8 }} onClick={onDone}>
                 Back to Today

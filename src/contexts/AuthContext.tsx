@@ -108,10 +108,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
         options: {
           data: { full_name: fullName, team_id: teamId || '' },
-          emailRedirectTo: window.location.origin,
         },
       });
-      if (error) return { error: error.message };
+      if (error) {
+        // Never impose a client-side signup cooldown. If Supabase returns a
+        // 429/rate-limit response, surface the server-side error instead of
+        // starting a local countdown that can get out of sync with Supabase.
+        const status = (error as { status?: number }).status;
+        if (status === 429 || /rate limit|too many requests|too many signup/i.test(error.message)) {
+          return {
+            error: 'Supabase has temporarily rate-limited signup requests. No signup countdown is enforced by this app. Check Supabase Authentication → Rate Limits and make sure Confirm email is OFF for password-based signup.',
+          };
+        }
+        return { error: error.message };
+      }
       if (!data.session) {
         return {
           error: 'Signup succeeded but no session was created. Disable "Confirm email" in Supabase Authentication → Providers → Email to allow immediate login.',

@@ -21,6 +21,7 @@ import {
 import { DailyLog, GroupWorkout, MonthlyCharityRecord, HealthReport, Team } from './types';
 import { getTodayDateStr, getMonthKey, getWeekRange, addDays } from './utils/dateUtils';
 import { calculateDailyScore, createEmptyDailyLog, setScoringThresholds } from './constants/rules';
+import { calculateAchievements, AchievementResult } from './services/achievementService';
 
 import { Sidebar, MenuButton, ActiveView, AdminView } from './components/Sidebar';
 import { DateNavigator } from './components/DateNavigator';
@@ -33,6 +34,7 @@ import { RulebookModal } from './components/RulebookModal';
 import { ExportImportModal } from './components/ExportImportModal';
 import { CompleteProfileModal } from './components/CompleteProfileModal';
 import { Toast } from './components/Toast';
+import { AchievementModal } from './components/AchievementModal';
 import { TEAMS_ENABLED } from './constants/features';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
@@ -106,6 +108,7 @@ export default function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savingToday, setSavingToday] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [achievementResult, setAchievementResult] = useState<AchievementResult | null>(null);
 
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [groupWorkouts, setGroupWorkouts] = useState<GroupWorkout[]>([]);
@@ -252,18 +255,22 @@ export default function App() {
     setSavingToday(true);
     try {
       await saveDailyLog(targetUserId, currentLog);
-      const fullName = actingProfile?.fullName || profile?.fullName;
-      if (fullName) {
-        await shareLogToCommunity(targetUserId, fullName, currentLog);
-      }
+      const fullName = actingProfile?.fullName || profile?.fullName || 'Participant';
+      const achievementResult = calculateAchievements(dailyLogs, currentLog);
+      await shareLogToCommunity(targetUserId, fullName, currentLog, achievementResult.all);
+      setDailyLogs((prev) => ({ ...prev, [currentLog.date]: currentLog }));
       setSaveError(null);
       setToastMessage('Saved & shared to Community ✓');
+      if (achievementResult.all.length > 0) {
+        setAchievementResult(achievementResult);
+        triggerConfetti();
+      }
     } catch (err: any) {
       setSaveError(err?.message || "Couldn't save your changes — check your connection and try again.");
     } finally {
       setSavingToday(false);
     }
-  }, [targetUserId, currentLog, actingProfile, profile]);
+  }, [targetUserId, currentLog, actingProfile, profile, dailyLogs, triggerConfetti]);
 
   const handleToggleWorkout = useCallback(async () => {
     if (!targetUserId || isViewingReadOnly) return;
@@ -276,13 +283,13 @@ export default function App() {
         groupName: 'Group',
         workoutType: 'Group Session',
         durationMinutes: 45,
-        date: getTodayDateStr(),
+        date: selectedDate,
         isMorning: true,
         notes: '',
       });
       setGroupWorkouts((prev) => [created, ...prev]);
     }
-  }, [targetUserId, thisWeekMorningEntry, isViewingReadOnly]);
+  }, [targetUserId, thisWeekMorningEntry, isViewingReadOnly, selectedDate]);
 
   const handleSaveCharityRecord = useCallback(
     async (record: MonthlyCharityRecord) => {
@@ -400,9 +407,13 @@ export default function App() {
 
       <main className="app-main">
         <header className="app-top">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
             <MenuButton onClick={() => setMobileOpen(true)} />
-            <div>
+            <div className="top-brand" aria-label="Challenge 360">
+              <span className="top-brand-mark">360°</span>
+              <strong>CHALLENGE 360</strong>
+            </div>
+            <div className="top-page-title">
               <h1>{title}</h1>
               <p>{subtitle}</p>
             </div>
@@ -558,6 +569,10 @@ export default function App() {
       </main>
 
       <RulebookModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} />
+
+      {achievementResult && (
+        <AchievementModal result={achievementResult} onClose={() => setAchievementResult(null)} />
+      )}
 
       <MonthlyCharityModal
         isOpen={isCharityModalOpen}

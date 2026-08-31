@@ -162,6 +162,9 @@ create table if not exists public.feed_posts (
   unique (user_id, date, kind)
 );
 
+-- Achievement badges are encoded in the existing feed_posts.message field so
+-- existing Supabase deployments do not require a schema migration.
+
 create table if not exists public.feed_reactions (
   id text primary key,
   post_id text not null references public.feed_posts (id) on delete cascade,

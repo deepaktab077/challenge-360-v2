@@ -45,7 +45,11 @@ export function Feed() {
         return { ...p, reactions };
       })
     );
-    await toggleFeedReaction(postId, profile.id, emoji, alreadyActive);
+    try {
+      await toggleFeedReaction(postId, profile.id, emoji, alreadyActive);
+    } catch {
+      await reload();
+    }
   };
 
   const handleAddComment = async (postId: string) => {
@@ -72,7 +76,11 @@ export function Feed() {
           : p
       )
     );
-    await addFeedComment(postId, profile.id, content);
+    try {
+      await addFeedComment(postId, profile.id, content);
+    } catch {
+      await reload();
+    }
   };
 
   const handleDeleteComment = async (postId: string, commentId: string) => {
@@ -119,9 +127,17 @@ export function Feed() {
               </div>
 
               <p style={{ fontWeight: 700, fontSize: 14, marginTop: 10, color: 'var(--ink)' }}>
-                {post.allDimensionsCompleted ? '⭐ 360° Complete Day!' : '🚀 High Scoring Day!'}
+                {post.allDimensionsCompleted ? '⭐ 360° Complete Day!' : '🚀 Daily Check-in'}
               </p>
               <p className="sub">{post.message}</p>
+
+              {post.achievementTags.length > 0 && (
+                <div className="achievement-tags" aria-label="Achievements earned">
+                  {post.achievementTags.map((tag) => (
+                    <span key={tag} className="achievement-tag">🏆 {tag}</span>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5 flex-wrap" style={{ marginTop: 10 }}>
                 {reactionCounts.map(({ emoji, count, active }) => (

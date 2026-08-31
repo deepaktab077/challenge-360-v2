@@ -74,6 +74,19 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
             all four dimensions."
           </p>
 
+          <section className="rule-summary">
+            <h4 className="text-sm font-black text-amber-400 uppercase tracking-wide mb-2">🏆 Daily Points — Max 85 pts / Day</h4>
+            <div className="rule-summary-grid">
+              <div><b>🏃 Body</b><span>40 pts</span></div>
+              <div><b>🧠 Mind</b><span>20 pts</span></div>
+              <div><b>❤️ Heart</b><span>10 pts</span></div>
+              <div><b>🧘 Soul</b><span>10 pts</span></div>
+              <div><b>⭐ Complete Day</b><span>+5 pts</span></div>
+              <div><b>🏋️ Morning Group Workout</b><span>+50 pts / week</span></div>
+            </div>
+            <p className="text-xs text-slate-500 mt-2">Base daily score is capped at 80 points, plus the automatic +5 Complete Day bonus. The +50 Morning Group Workout is a separate weekly bonus and can be earned once per week.</p>
+          </section>
+
           {/* BODY */}
           <section>
             <h4 className="text-sm font-black text-indigo-400 uppercase tracking-wide mb-1">
@@ -96,7 +109,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
                 icon={<Users className="w-4 h-4" />}
                 label="Morning Group Workout"
                 points="+50 bonus"
-                description="Morning group workout on any one of 3 days = +50 bonus. Applicable once a week only."
+                description="Morning group workout on any 1 day = +50 bonus. Applicable once a week only."
               />
               <RuleRow
                 icon={<Salad className="w-4 h-4" />}
@@ -114,7 +127,7 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
                 icon={<Moon className="w-4 h-4" />}
                 label="Sleep Duration"
                 points="7 pts"
-                description="7 hrs = 5 · 7.30+ hrs = 7 · 6.30–7.00 hrs = 2 · below 6.30 hrs = 0"
+                description="7.5h+ = 7 · 7.0–7.49h = 5 · 6.5–6.99h = 2 · below 6.5h = 0"
               />
               <RuleRow
                 icon={<Clock className="w-4 h-4" />}
@@ -203,9 +216,16 @@ export const RulebookModal: React.FC<RulebookModalProps> = ({ isOpen, onClose })
             </div>
           </section>
 
+          <section className="rule-howto">
+            <h4 className="text-sm font-black text-slate-200 uppercase tracking-wide mb-2">⚡ How to Log</h4>
+            <p>1️⃣ Open the Challenge 360 application.</p>
+            <p>2️⃣ Pick your name and tap your habits — it should take less than 15 seconds daily.</p>
+            <p>3️⃣ Check the Leaderboard and cheer the team in the Community Feed. 💪✨</p>
+          </section>
+
           <p className="text-xs text-slate-500 text-center pt-2">
-            Daily max: Body (40) + Mind (20) + Heart (10) + Soul (10) = 80 base points, +5 Complete Day Bonus = 85
-            max/day. Weekly: +50 Morning Group Workout Bonus (once/week).
+            Daily max: Body (40) + Mind (20) + Heart (10) + Soul (10) = 80 base points + 5 Complete Day Bonus = 85.
+            Weekly bonus: +50 Morning Group Workout, once per week.
           </p>
         </div>
 

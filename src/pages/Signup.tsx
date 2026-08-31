@@ -19,23 +19,16 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
   const [teamId, setTeamId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   useEffect(() => {
     if (TEAMS_ENABLED) fetchAllTeams().then(setTeams);
   }, []);
 
-  useEffect(() => {
-    if (cooldownSeconds <= 0) return;
-    const t = setInterval(() => setCooldownSeconds((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [cooldownSeconds]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (cooldownSeconds > 0 || submitting) return; // avoid duplicate/rapid-fire requests
+    if (submitting) return; // prevent duplicate submissions while the request is in progress
 
     const normalizedEmail = email.trim().toLowerCase();
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -54,12 +47,7 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
     setSubmitting(false);
 
     if (result.error) {
-      if (/rate limit/i.test(result.error)) {
-        setError('Too many signup attempts. Please wait a moment before trying again.');
-        setCooldownSeconds(60);
-      } else {
-        setError(result.error);
-      }
+      setError(result.error);
       return;
     }
 
@@ -108,6 +96,7 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
                   autoComplete="email"
                 />
               </div>
+              <p className="text-[11px] text-slate-500 mt-1.5">Use a valid email address. No verification email is sent during signup.</p>
             </div>
 
             <div>
@@ -166,11 +155,11 @@ export function Signup({ onSwitchToLogin }: SignupProps) {
 
             <button
               type="submit"
-              disabled={submitting || cooldownSeconds > 0}
+              disabled={submitting}
               className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors"
             >
               <UserPlus className="w-4 h-4" />
-              {submitting ? 'Creating account…' : cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : 'Create Account'}
+              {submitting ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
         </div>

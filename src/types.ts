@@ -161,6 +161,7 @@ export interface FeedPost {
   createdAt: string;
   reactions: FeedReaction[];
   comments: FeedComment[];
+  achievementTags: string[];
 }
 
 export interface PillarScoreBreakdown {

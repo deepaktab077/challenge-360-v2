@@ -24,8 +24,9 @@ anywhere in this stack.
 1. **SQL Editor → New query**.
 2. Paste the entire contents of `supabase/schema.sql` and click **Run**.
    This creates `teams`, `profiles`, `daily_logs`, `group_workouts`,
-   `charity_records`, `health_reports`, all security rules, and seeds 3
+   `charity_records`, `health_reports`, `feed_posts`, `feed_reactions`, `feed_comments`, all security rules, and seeds 3
    starter teams (edit/delete these from the Admin panel later).
+
 
 ### 1.3 Disable email confirmation for self-signup
 1. **Authentication → Providers → Email** → switch **Confirm email** OFF.
@@ -117,6 +118,7 @@ account from 1.4 — you should land on the scorecard with **Admin** and
 - **Teams** are created only by admins; participants pick theirs at signup.
   This feature is currently hidden from users by default — flip
   `TEAMS_ENABLED` in `src/constants/features.ts` to turn it back on.
+- **Community**: explicitly saving a daily check-in publishes/updates one daily activity card with achievement tags. All authenticated participants can react with emojis and add comments.
 - **Leaderboard** reads only aggregate score totals (via two
   security-definer SQL functions), never raw habit data — so rankings are
   visible to everyone without exposing anyone's private hydration/sleep/etc.
