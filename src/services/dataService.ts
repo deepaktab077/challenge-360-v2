@@ -787,6 +787,7 @@ export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
 
   return (posts || []).map((row: any) => {
     const teamId = teamIdById.get(row.user_id);
+    const parsed = parseFeedMessage(row.message || '');
     return {
       id: row.id,
       userId: row.user_id,
@@ -796,9 +797,9 @@ export async function fetchFeed(limit = 50): Promise<FeedPost[]> {
       totalScore: row.total_score,
       allDimensionsCompleted: row.all_dimensions_completed,
       kind: row.kind,
-      message: parseFeedMessage(row.message || '').message,
+      message: parsed.message,
       createdAt: row.created_at,
-      achievementTags: parseFeedMessage(row.message || '').achievements,
+      achievementTags: parsed.achievements.map((a) => ({ id: a.id, icon: a.icon, label: a.label })),
       reactions: reactionsByPost.get(row.id) || [],
       comments: commentsByPost.get(row.id) || [],
     };
@@ -839,6 +840,7 @@ export async function fetchLatestFeedPostForUser(userId: string): Promise<FeedPo
   ]);
   const row = posts?.[0];
   if (!row) return null;
+  const latestParsed = parseFeedMessage(row.message || '');
 
   const postReactions: FeedReaction[] = (reactions || [])
     .filter((r: any) => r.post_id === row.id)
@@ -851,9 +853,9 @@ export async function fetchLatestFeedPostForUser(userId: string): Promise<FeedPo
     totalScore: row.total_score,
     allDimensionsCompleted: row.all_dimensions_completed,
     kind: row.kind,
-    message: parseFeedMessage(row.message || '').message,
+    message: latestParsed.message,
     createdAt: row.created_at,
-    achievementTags: parseFeedMessage(row.message || '').achievements,
+    achievementTags: latestParsed.achievements.map((a) => ({ id: a.id, icon: a.icon, label: a.label })),
     reactions: postReactions,
     comments: [],
   };
@@ -975,4 +977,85 @@ export function buildAdminDashboardCsv(entries: IndividualLeaderboardEntry[], pe
   );
 
   return [headers.join(','), ...rows].join('\n');
+}
+
+
+// ============================================================================
+// ACHIEVEMENTS (persisted, one-time badge unlocks)
+// ============================================================================
+
+/** Every achievement id this participant has ever unlocked (permanent record,
+ * used both to render their badge collection and to make sure the "new
+ * badge" celebration only fires once per badge). */
+export async function fetchEarnedAchievementIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase.from('user_achievements').select('achievement_id').eq('user_id', userId);
+  if (error || !data) return new Set();
+  return new Set(data.map((row: any) => row.achievement_id as string));
+}
+
+export interface EarnedAchievementRecord {
+  achievementId: string;
+  earnedAt: string;
+}
+
+export async function fetchAllEarnedAchievements(userId: string): Promise<EarnedAchievementRecord[]> {
+  const { data, error } = await supabase
+    .from('user_achievements')
+    .select('*')
+    .eq('user_id', userId)
+    .order('earned_at', { ascending: false });
+  if (error || !data) return [];
+  return data.map((row: any) => ({ achievementId: row.achievement_id, earnedAt: row.earned_at }));
+}
+
+/** Records newly-unlocked achievements. Safe to call with achievements the
+ * user already has — the unique constraint on (user_id, achievement_id)
+ * means duplicates are silently ignored, never double-recorded. */
+export async function recordEarnedAchievements(userId: string, achievementIds: string[]): Promise<void> {
+  if (achievementIds.length === 0) return;
+  const rows = achievementIds.map((id) => ({ user_id: userId, achievement_id: id }));
+  await supabase.from('user_achievements').upsert(rows, { onConflict: 'user_id,achievement_id', ignoreDuplicates: true });
+}
+
+// ============================================================================
+// LEADERBOARD RANK MOVEMENT (snapshots + delta since last auto-save)
+// ============================================================================
+
+/** Records today's rank for every participant in one pass (called whenever
+ * the leaderboard loads). Upserts on (user_id, today) so repeated loads the
+ * same day just refresh today's snapshot rather than creating noise. */
+export async function recordLeaderboardSnapshots(
+  entries: { userId: string; rank: number; totalScore: number }[]
+): Promise<void> {
+  if (entries.length === 0) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = entries.map((e) => ({
+    user_id: e.userId,
+    snapshot_date: today,
+    rank: e.rank,
+    total_score: e.totalScore,
+  }));
+  await supabase.from('leaderboard_snapshots').upsert(rows, { onConflict: 'user_id,snapshot_date' });
+}
+
+/** Each participant's rank as of their most recent snapshot BEFORE today —
+ * i.e. the "last auto-save" to compare movement against. */
+export async function fetchPreviousRankSnapshots(): Promise<Map<string, number>> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('leaderboard_snapshots')
+    .select('user_id,snapshot_date,rank')
+    .lt('snapshot_date', today)
+    .order('snapshot_date', { ascending: false });
+  if (error || !data) return new Map();
+
+  const previousByUser = new Map<string, number>();
+  for (const row of data) {
+    // Rows are ordered most-recent-first, so the first one seen per user is
+    // their latest snapshot before today.
+    if (!previousByUser.has(row.user_id)) {
+      previousByUser.set(row.user_id, row.rank);
+    }
+  }
+  return previousByUser;
 }

@@ -490,6 +490,65 @@ create policy "scoring_config_update_admin_only" on public.scoring_config
   for update using (public.is_admin());
 
 -- ============================================================================
+-- USER ACHIEVEMENTS (persisted badge unlocks)
+-- ============================================================================
+-- Badge *definitions* (labels/icons/criteria) live in application code
+-- (src/services/achievementService.ts) — this table only records WHICH ones
+-- a participant has actually unlocked and WHEN, so:
+--   1. a badge is only ever awarded once (unique constraint below)
+--   2. the "new badge" celebration only fires for genuinely new unlocks
+--   3. earned badges persist permanently and show on the participant's profile
+create table if not exists public.user_achievements (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  achievement_id text not null,
+  earned_at timestamptz not null default now(),
+  primary key (user_id, achievement_id)
+);
+
+alter table public.user_achievements enable row level security;
+
+drop policy if exists "user_achievements_select_all_authenticated" on public.user_achievements;
+create policy "user_achievements_select_all_authenticated" on public.user_achievements
+  for select to authenticated using (true);
+
+drop policy if exists "user_achievements_insert_own_or_admin" on public.user_achievements;
+create policy "user_achievements_insert_own_or_admin" on public.user_achievements
+  for insert with check (user_id = auth.uid() or public.is_admin());
+
+-- ============================================================================
+-- LEADERBOARD RANK SNAPSHOTS (rank movement — #8 ↑3 / #4 ↓2 / #5 —)
+-- ============================================================================
+-- One row per participant per day, recording their rank as of that day's
+-- last leaderboard load. Movement is shown by comparing today's snapshot to
+-- the most recent PRIOR day's snapshot. Rank/score are already public
+-- (shown to everyone on the leaderboard itself), so this is open for any
+-- signed-in participant to read and write — not just their own row —
+-- since the leaderboard computes and snapshots everyone's rank together in
+-- one pass on the client.
+create table if not exists public.leaderboard_snapshots (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  snapshot_date date not null,
+  rank integer not null,
+  total_score integer not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, snapshot_date)
+);
+
+alter table public.leaderboard_snapshots enable row level security;
+
+drop policy if exists "leaderboard_snapshots_select_all_authenticated" on public.leaderboard_snapshots;
+create policy "leaderboard_snapshots_select_all_authenticated" on public.leaderboard_snapshots
+  for select to authenticated using (true);
+
+drop policy if exists "leaderboard_snapshots_insert_all_authenticated" on public.leaderboard_snapshots;
+create policy "leaderboard_snapshots_insert_all_authenticated" on public.leaderboard_snapshots
+  for insert to authenticated with check (true);
+
+drop policy if exists "leaderboard_snapshots_update_all_authenticated" on public.leaderboard_snapshots;
+create policy "leaderboard_snapshots_update_all_authenticated" on public.leaderboard_snapshots
+  for update to authenticated using (true);
+
+-- ============================================================================
 -- MAKE YOURSELF THE FIRST SUPER USER
 -- ============================================================================
 -- 1. Create your own account first, either:

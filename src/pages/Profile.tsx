@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { updateUserName, updateLeaderboardVisibility } from '../services/dataService';
+import { updateUserName, updateLeaderboardVisibility, fetchAllEarnedAchievements, EarnedAchievementRecord } from '../services/dataService';
+import { ACHIEVEMENT_DEFINITIONS } from '../services/achievementService';
 
 export function Profile() {
   const { profile, refreshMyProfile } = useAuth();
@@ -8,6 +9,16 @@ export function Profile() {
   const [visible, setVisible] = useState(profile?.leaderboardVisible ?? true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [earned, setEarned] = useState<EarnedAchievementRecord[]>([]);
+  const [loadingBadges, setLoadingBadges] = useState(true);
+
+  useEffect(() => {
+    if (!profile) return;
+    fetchAllEarnedAchievements(profile.id).then((records) => {
+      setEarned(records);
+      setLoadingBadges(false);
+    });
+  }, [profile?.id]);
 
   if (!profile) return null;
 
@@ -24,6 +35,8 @@ export function Profile() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
+
+  const earnedById = new Map<string, string>(earned.map((e) => [e.achievementId, e.earnedAt]));
 
   return (
     <div className="animate-fadeIn grid g2">
@@ -63,6 +76,26 @@ export function Profile() {
           Supabase Postgres database with row-level security, plus private Supabase Storage for images. No data ever
           goes to a third party, and nothing is public unless you choose to appear on the leaderboard.
         </p>
+      </div>
+
+      <div className="card" style={{ gridColumn: '1 / -1' }}>
+        <div className="ey">BADGES</div>
+        <h2>{loadingBadges ? 'Loading…' : `${earned.length} of ${ACHIEVEMENT_DEFINITIONS.length} earned`}</h2>
+        <div className="badgegrid">
+          {ACHIEVEMENT_DEFINITIONS.map((def) => {
+            const earnedAt = earnedById.get(def.id);
+            const isEarned = !!earnedAt;
+            return (
+              <div key={def.id} className="badge-item" style={{ opacity: isEarned ? 1 : 0.5 }}>
+                <span>{def.icon}</span>
+                <b>{def.label}</b>
+                <p className="sub" style={{ margin: 0 }}>
+                  {isEarned ? `Earned ${new Date(earnedAt!).toLocaleDateString()}` : def.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

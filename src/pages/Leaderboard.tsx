@@ -4,6 +4,8 @@ import {
   fetchIndividualLeaderboard,
   fetchTeamLeaderboard,
   updateUserGoal,
+  recordLeaderboardSnapshots,
+  fetchPreviousRankSnapshots,
   LeaderboardPeriod,
 } from '../services/dataService';
 import { IndividualLeaderboardEntry, TeamLeaderboardEntry } from '../types';
@@ -43,6 +45,29 @@ function scoreFor(entry: IndividualLeaderboardEntry, category: Category): number
   }
 }
 
+/** #8 ↑3 / #4 ↓2 / #5 — since the last recorded snapshot (see reload()). */
+function RankMovementBadge({ currentRank, previousRank }: { currentRank: number; previousRank: number | undefined }) {
+  if (previousRank === undefined) return null; // no prior snapshot yet (e.g. brand new participant)
+  const delta = previousRank - currentRank; // positive = moved up
+  if (delta === 0) {
+    return (
+      <span className="sub" style={{ fontWeight: 700 }} title="No change since last snapshot">
+        —
+      </span>
+    );
+  }
+  const up = delta > 0;
+  return (
+    <span
+      style={{ fontWeight: 800, fontSize: 11, color: up ? 'var(--body)' : 'var(--danger)' }}
+      title={`${up ? 'Up' : 'Down'} ${Math.abs(delta)} since last snapshot`}
+    >
+      {up ? '↑' : '↓'}
+      {Math.abs(delta)}
+    </span>
+  );
+}
+
 interface LeaderboardProps {
   onEditAsAdmin?: (userId: string) => void;
 }
@@ -58,6 +83,7 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
   const [goalInput, setGoalInput] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<IndividualLeaderboardEntry | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [previousRanks, setPreviousRanks] = useState<Map<string, number>>(new Map());
 
   const reload = (p: LeaderboardPeriod) => {
     setLoading(true);
@@ -66,6 +92,15 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
       setTeams(tm);
       setLoading(false);
       setLastUpdated(new Date());
+
+      // Rank movement is tracked against the "Overall" (all-time) standing
+      // only — that's the stable identity "current rank" naturally refers
+      // to. Week/Month views intentionally don't record or show movement,
+      // since their ranking resets each period and would corrupt the trend.
+      if (p === 'all' && ind.length > 0) {
+        recordLeaderboardSnapshots(ind.map((e) => ({ userId: e.userId, rank: e.rank, totalScore: e.totalScore })));
+        fetchPreviousRankSnapshots().then(setPreviousRanks);
+      }
     });
   };
 
@@ -165,8 +200,11 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
       {myEntry && category !== 'team' && (
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', margin: 0 }}>
+            <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
               You: #{sortedByCategory.findIndex((e) => e.userId === myEntry.userId) + 1} · {myEntry.totalScore} pts
+              {category === 'overall' && period === 'all' && (
+                <RankMovementBadge currentRank={myEntry.rank} previousRank={previousRanks.get(myEntry.userId)} />
+              )}
             </p>
             <div className="flex items-center gap-1.5 sub" style={{ marginTop: 2 }}>
               {editingGoal ? (
@@ -309,6 +347,9 @@ export function Leaderboard({ onEditAsAdmin }: LeaderboardProps) {
                     {TEAMS_ENABLED ? `${e.teamName || 'No team'} · ` : ''}Goal {e.goalProgress}%
                   </p>
                 </div>
+                {category === 'overall' && period === 'all' && (
+                  <RankMovementBadge currentRank={e.rank} previousRank={previousRanks.get(e.userId)} />
+                )}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {e.disqualifiedWeeks > 0 && <AlertTriangle className="w-3.5 h-3.5" style={{ color: 'var(--danger)' }} />}
                   {e.perfectDays > 0 && (

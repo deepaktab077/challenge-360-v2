@@ -4,9 +4,11 @@ import { DailyLog, PillarScoreBreakdown } from '../types';
 import { calculateBalanceScore, MORNING_WORKOUT_BONUS_POINTS } from '../constants/rules';
 import { WheelChart } from '../components/WheelChart';
 import { ProgressRow } from '../components/ChoiceInputs';
+import { WhatsLeft } from '../components/WhatsLeft';
 
 interface TodayProps {
   currentLog: DailyLog;
+  dailyLogs: Record<string, DailyLog>;
   score: PillarScoreBreakdown;
   currentStreak: number;
   myRank: number | null;
@@ -23,6 +25,7 @@ const PILLAR_MAX = { body: 40, mind: 20, heart: 10, soul: 10 };
 
 export function Today({
   currentLog,
+  dailyLogs,
   score,
   currentStreak,
   myRank,
@@ -132,6 +135,10 @@ export function Today({
           <strong>{strengthSessionsThisWeek >= 2 ? 'Secure' : 'At risk'}</strong>
           <span className="sub">{strengthSessionsThisWeek}/2 sessions</span>
         </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <WhatsLeft currentLog={currentLog} dailyLogs={dailyLogs} />
       </div>
     </div>
   );

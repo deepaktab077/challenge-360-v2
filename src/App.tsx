@@ -17,6 +17,8 @@ import {
   fetchAllTeams,
   fetchIndividualLeaderboard,
   fetchScoringConfig,
+  fetchEarnedAchievementIds,
+  recordEarnedAchievements,
 } from './services/dataService';
 import { DailyLog, GroupWorkout, MonthlyCharityRecord, HealthReport, Team } from './types';
 import { getTodayDateStr, getMonthKey, getWeekRange, addDays } from './utils/dateUtils';
@@ -109,6 +111,7 @@ export default function App() {
   const [savingToday, setSavingToday] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [achievementResult, setAchievementResult] = useState<AchievementResult | null>(null);
+  const [earnedAchievementIds, setEarnedAchievementIds] = useState<Set<string>>(new Set());
 
   const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLog>>({});
   const [groupWorkouts, setGroupWorkouts] = useState<GroupWorkout[]>([]);
@@ -131,16 +134,18 @@ export default function App() {
 
   const reloadData = useCallback(async () => {
     if (!targetUserId) return;
-    const [logs, workouts, charities, reports] = await Promise.all([
+    const [logs, workouts, charities, reports, earnedIds] = await Promise.all([
       loadAllDailyLogs(targetUserId),
       loadAllGroupWorkouts(targetUserId),
       loadAllCharityRecords(targetUserId),
       loadHealthReports(targetUserId),
+      fetchEarnedAchievementIds(targetUserId),
     ]);
     setDailyLogs(logs);
     setGroupWorkouts(workouts);
     setCharityRecords(charities);
     setHealthReports(reports);
+    setEarnedAchievementIds(earnedIds);
   }, [targetUserId]);
 
   useEffect(() => {
@@ -261,8 +266,26 @@ export default function App() {
       setDailyLogs((prev) => ({ ...prev, [currentLog.date]: currentLog }));
       setSaveError(null);
       setToastMessage('Saved & shared to Community ✓');
-      if (achievementResult.all.length > 0) {
-        setAchievementResult(achievementResult);
+
+      // Only celebrate — and only ever award once — badges the participant
+      // hasn't already earned. Everything currently qualifying still gets
+      // attached to today's Community post above, but the modal is reserved
+      // for genuinely new unlocks so it doesn't replay on every save.
+      const isNew = (tag: { id: string }) => !earnedAchievementIds.has(tag.id);
+      const newlyEarned = achievementResult.all.filter(isNew);
+      if (newlyEarned.length > 0) {
+        await recordEarnedAchievements(targetUserId, newlyEarned.map((tag) => tag.id));
+        setEarnedAchievementIds((prev) => {
+          const next = new Set(prev);
+          newlyEarned.forEach((tag) => next.add(tag.id));
+          return next;
+        });
+        setAchievementResult({
+          daily: achievementResult.daily.filter(isNew),
+          weekly: achievementResult.weekly.filter(isNew),
+          overall: achievementResult.overall.filter(isNew),
+          all: newlyEarned,
+        });
         triggerConfetti();
       }
     } catch (err: any) {
@@ -270,7 +293,7 @@ export default function App() {
     } finally {
       setSavingToday(false);
     }
-  }, [targetUserId, currentLog, actingProfile, profile, dailyLogs, triggerConfetti]);
+  }, [targetUserId, currentLog, actingProfile, profile, dailyLogs, triggerConfetti, earnedAchievementIds]);
 
   const handleToggleWorkout = useCallback(async () => {
     if (!targetUserId || isViewingReadOnly) return;
@@ -476,6 +499,7 @@ export default function App() {
                   <DateNavigator selectedDate={selectedDate} onSelectDate={setSelectedDate} dailyLogs={dailyLogs} />
                   <Today
                     currentLog={currentLog}
+                    dailyLogs={dailyLogs}
                     score={currentScoreBreakdown}
                     currentStreak={currentStreak}
                     myRank={myRank}

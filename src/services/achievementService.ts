@@ -37,7 +37,7 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementTag[] = [
   { id: 'legend_360', label: '360° Legend', icon: '🏆', description: 'Exceptional overall performance', category: 'overall' },
 ];
 
-function addDays(dateStr: string, amount: number): string {
+export function addDays(dateStr: string, amount: number): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
   d.setDate(d.getDate() + amount);
@@ -45,7 +45,7 @@ function addDays(dateStr: string, amount: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function bedtimeGoalMet(log: DailyLog): boolean {
+export function bedtimeGoalMet(log: DailyLog): boolean {
   const value = log.body?.bedTime;
   if (!value) return false;
   const [hour, minute] = value.split(':').map(Number);
@@ -53,15 +53,15 @@ function bedtimeGoalMet(log: DailyLog): boolean {
   return hour < 22 || (hour === 22 && minute === 0);
 }
 
-function hydrationGoalMet(log: DailyLog): boolean {
+export function hydrationGoalMet(log: DailyLog): boolean {
   return (log.body?.hydrationLiters || 0) >= 4;
 }
 
-function screenGoalMet(log: DailyLog): boolean {
+export function screenGoalMet(log: DailyLog): boolean {
   return (log.mind?.screenHours ?? 24) < 2;
 }
 
-function isoWeekKey(dateStr: string): string {
+export function isoWeekKey(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
   const target = new Date(d.valueOf());
   const dayNr = (d.getDay() + 6) % 7;
@@ -73,7 +73,7 @@ function isoWeekKey(dateStr: string): string {
   return `${target.getFullYear()}-W${weekNumber}`;
 }
 
-function currentStreak(logs: Record<string, DailyLog>, endDate: string): number {
+export function currentStreak(logs: Record<string, DailyLog>, endDate: string): number {
   let streak = 0;
   let date = endDate;
   while (true) {

@@ -134,7 +134,9 @@ export function Feed() {
               {post.achievementTags.length > 0 && (
                 <div className="achievement-tags" aria-label="Achievements earned">
                   {post.achievementTags.map((tag) => (
-                    <span key={tag} className="achievement-tag">🏆 {tag}</span>
+                    <span key={tag.id} className="achievement-tag">
+                      {tag.icon} {tag.label}
+                    </span>
                   ))}
                 </div>
               )}
